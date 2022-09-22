@@ -1,0 +1,31 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+DOPACKAGES=$(shell dh_listpackages)
+
+%:
+	dh $@ --with gir
+
+ifneq (,$(filter libqmi-glib-doc,$(DOPACKAGES)))
+CONFIGURE_FLAGS = --enable-gtk-doc --enable-gtk-doc-html
+else
+CONFIGURE_FLAGS = --disable-gtk-doc --disable-gtk-doc-html
+endif
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		$(CONFIGURE_FLAGS) \
+		--enable-firmware-update \
+		--enable-gudev \
+		--enable-introspection=yes \
+		--enable-mbim-qmux \
+		--enable-more-warnings
+
+override_dh_missing:
+	dh_missing -X.la
+
+override_dh_strip:
+	dh_strip --dbgsym-migration='libqmi-glib5-dbg (<< 1.14.0-1~)'
+
+override_dh_installexamples:
+	dh_installexamples -XMakefile

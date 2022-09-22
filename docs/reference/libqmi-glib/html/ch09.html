@@ -1,0 +1,99 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>User Identity Module (UIM) service: libqmi-glib Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<link rel="home" href="index.html" title="libqmi-glib Reference Manual">
+<link rel="up" href="index.html" title="libqmi-glib Reference Manual">
+<link rel="prev" href="libqmi-glib-PBM-Get-All-Capabilities-request.html" title="PBM Get All Capabilities request">
+<link rel="next" href="QmiClientUim.html" title="QmiClientUim">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
+<link rel="stylesheet" href="style.css" type="text/css">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="5"><tr valign="middle">
+<td width="100%" align="left" class="shortcuts"></td>
+<td><a accesskey="h" href="index.html"><img src="home.png" width="16" height="16" border="0" alt="Home"></a></td>
+<td><img src="up-insensitive.png" width="16" height="16" border="0"></td>
+<td><a accesskey="p" href="libqmi-glib-PBM-Get-All-Capabilities-request.html"><img src="left.png" width="16" height="16" border="0" alt="Prev"></a></td>
+<td><a accesskey="n" href="QmiClientUim.html"><img src="right.png" width="16" height="16" border="0" alt="Next"></a></td>
+</tr></table>
+<div class="chapter">
+<div class="titlepage"><div><div><h1 class="title">
+<a name="id-1.10"></a>User Identity Module (UIM) service</h1></div></div></div>
+<div class="toc"><dl class="toc">
+<dt>
+<span class="refentrytitle"><a href="QmiClientUim.html">QmiClientUim</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the UIM service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-enumerations-and-flags.html">UIM enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch09.html#id-1.10.4">UIM Indications</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Card-Status-indication.html">UIM Card Status indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Slot-Status-indication.html">UIM Slot Status indication</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+<dt><span class="section"><a href="ch09s02.html">UIM Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Reset-request.html">UIM Reset request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Register-Events-request.html">UIM Register Events request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Set-PIN-Protection-request.html">UIM Set PIN Protection request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Verify-PIN-request.html">UIM Verify PIN request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Unblock-PIN-request.html">UIM Unblock PIN request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Change-PIN-request.html">UIM Change PIN request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Read-Transparent-request.html">UIM Read Transparent request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Read-Record-request.html">UIM Read Record request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Get-File-Attributes-request.html">UIM Get File Attributes request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Get-Card-Status-request.html">UIM Get Card Status request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Get-Supported-Messages-request.html">UIM Get Supported Messages request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Power-Off-SIM-request.html">UIM Power Off SIM request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Power-On-SIM-request.html">UIM Power On SIM request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Change-Provisioning-Session-request.html">UIM Change Provisioning Session request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Switch-Slot-request.html">UIM Switch Slot request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Get-Slot-Status-request.html">UIM Get Slot Status request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></div>
+<div class="section"><div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="id-1.10.4"></a>UIM Indications</h2></div></div></div></div>
+</div>
+<div class="footer">
+<hr>Generated by GTK-Doc V1.33.1</div>
+</body>
+</html>

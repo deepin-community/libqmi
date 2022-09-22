@@ -1,0 +1,1086 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>libqmi-glib Reference Manual: libqmi-glib Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<link rel="home" href="index.html" title="libqmi-glib Reference Manual">
+<link rel="next" href="ch01.html" title="Core">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
+<link rel="stylesheet" href="style.css" type="text/css">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<div class="book">
+<div class="titlepage">
+<div>
+<div><table class="navigation" id="top" width="100%" cellpadding="2" cellspacing="0"><tr><th valign="middle"><p class="title">libqmi-glib Reference Manual</p></th></tr></table></div>
+<div><p class="releaseinfo">for libqmi-glib 1.26.10
+</p></div>
+<div><p class="copyright">Copyright © 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020 The libqmi-glib authors</p></div>
+<div><div class="legalnotice">
+<a name="id-1.1.4"></a><p>
+        Permission is granted to copy, distribute and/or modify this
+        document under the terms of the <em class="citetitle">GNU Free
+        Documentation License</em>, Version 1.3 or any later
+        version published by the Free Software Foundation with no
+        Invariant Sections, no Front-Cover Texts, and no Back-Cover
+        Texts. You may obtain a copy of the <em class="citetitle">GNU Free
+        Documentation License</em> from the Free Software
+        Foundation by visiting <a class="ulink" href="http://www.fsf.org" target="_top">their Web site</a> or by writing
+        to:
+        </p>
+<div class="address"><p><br>
+          The Free Software Foundation, Inc.<br>
+          <span class="street">51 Franklin Street</span>, Suite 500<br>
+          <span class="city">Boston</span>, <span class="state">MA</span> <span class="postcode">02110-1335</span><br>
+          <span class="country">USA</span><br>
+        </p></div>
+<p>
+      </p>
+</div></div>
+</div>
+<hr>
+</div>
+<div class="toc"><dl class="toc">
+<dt><span class="chapter"><a href="ch01.html">Core</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-Version-and-feature-checks.html">Version and feature checks</a></span><span class="refpurpose"> — Version information in the API.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-QmiMessage.html">QmiMessage</a></span><span class="refpurpose"> — Generic QMI message handling routines</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="QmiMessageContext.html">QmiMessageContext</a></span><span class="refpurpose"> — the QMI message context</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="QmiDevice.html">QmiDevice</a></span><span class="refpurpose"> — Generic QMI device handling routines</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="QmiClient.html">QmiClient</a></span><span class="refpurpose"> — Generic QMI client handling routines</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="QmiProxy.html">QmiProxy</a></span><span class="refpurpose"> — QMI proxy handling routines</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-Common-enumerations-and-flags.html">Common enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-Errors.html">Errors</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-Common-utilities.html">Common utilities</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+<dt><span class="chapter"><a href="ch02.html">Device Management Service (DMS)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientDms.html">QmiClientDms</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the DMS service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-enumerations-and-flags.html">DMS enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch02.html#id-1.3.4">DMS Indications</a></span></dt>
+<dd><dl><dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Event-Report-indication.html">DMS Event Report indication</a></span><span class="refpurpose"></span>
+</dt></dl></dd>
+<dt><span class="section"><a href="ch02s02.html">DMS Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Reset-request.html">DMS Reset request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Set-Event-Report-request.html">DMS Set Event Report request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Capabilities-request.html">DMS Get Capabilities request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Manufacturer-request.html">DMS Get Manufacturer request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Model-request.html">DMS Get Model request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Revision-request.html">DMS Get Revision request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-MSISDN-request.html">DMS Get MSISDN request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-IDs-request.html">DMS Get IDs request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Power-State-request.html">DMS Get Power State request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-UIM-Set-PIN-Protection-request.html">DMS UIM Set PIN Protection request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-UIM-Verify-PIN-request.html">DMS UIM Verify PIN request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-UIM-Unblock-PIN-request.html">DMS UIM Unblock PIN request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-UIM-Change-PIN-request.html">DMS UIM Change PIN request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-UIM-Get-PIN-Status-request.html">DMS UIM Get PIN Status request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Hardware-Revision-request.html">DMS Get Hardware Revision request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Operating-Mode-request.html">DMS Get Operating Mode request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Set-Operating-Mode-request.html">DMS Set Operating Mode request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Time-request.html">DMS Get Time request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-PRL-Version-request.html">DMS Get PRL Version request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Activation-State-request.html">DMS Get Activation State request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Activate-Automatic-request.html">DMS Activate Automatic request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Activate-Manual-request.html">DMS Activate Manual request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-User-Lock-State-request.html">DMS Get User Lock State request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Set-User-Lock-State-request.html">DMS Set User Lock State request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Set-User-Lock-Code-request.html">DMS Set User Lock Code request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Read-User-Data-request.html">DMS Read User Data request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Write-User-Data-request.html">DMS Write User Data request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Read-ERI-File-request.html">DMS Read ERI File request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Restore-Factory-Defaults-request.html">DMS Restore Factory Defaults request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Validate-Service-Programming-Code-request.html">DMS Validate Service Programming Code request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-UIM-Get-ICCID-request.html">DMS UIM Get ICCID request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Set-Firmware-ID-request.html">DMS Set Firmware ID request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-UIM-Get-CK-Status-request.html">DMS UIM Get CK Status request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-UIM-Set-CK-Protection-request.html">DMS UIM Set CK Protection request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-UIM-Unblock-CK-request.html">DMS UIM Unblock CK request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-UIM-Get-IMSI-request.html">DMS UIM Get IMSI request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-UIM-Get-State-request.html">DMS UIM Get State request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Band-Capabilities-request.html">DMS Get Band Capabilities request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Factory-SKU-request.html">DMS Get Factory SKU request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Firmware-Preference-request.html">DMS Get Firmware Preference request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Set-Firmware-Preference-request.html">DMS Set Firmware Preference request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-List-Stored-Images-request.html">DMS List Stored Images request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Delete-Stored-Image-request.html">DMS Delete Stored Image request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Set-Time-request.html">DMS Set Time request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Stored-Image-Info-request.html">DMS Get Stored Image Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Alt-Net-Config-request.html">DMS Get Alt Net Config request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Set-Alt-Net-Config-request.html">DMS Set Alt Net Config request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Boot-Image-Download-Mode-request.html">DMS Get Boot Image Download Mode request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Set-Boot-Image-Download-Mode-request.html">DMS Set Boot Image Download Mode request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Software-Version-request.html">DMS Get Software Version request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Set-Service-Programming-Code-request.html">DMS Set Service Programming Code request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-MAC-Address-request.html">DMS Get MAC Address request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-HP-Change-Device-Mode-request.html">DMS HP Change Device Mode request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Swi-Get-Current-Firmware-request.html">DMS Swi Get Current Firmware request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Swi-Get-USB-Composition-request.html">DMS Swi Get USB Composition request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Swi-Set-USB-Composition-request.html">DMS Swi Set USB Composition request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Foxconn-Get-Firmware-Version-request.html">DMS Foxconn Get Firmware Version request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Set-FCC-Authentication-request.html">DMS Set FCC Authentication request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Foxconn-Change-Device-Mode-request.html">DMS Foxconn Change Device Mode request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DMS-Get-Supported-Messages-request.html">DMS Get Supported Messages request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch03.html">Network Access Service (NAS)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientNas.html">QmiClientNas</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the NAS service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-enumerations-and-flags.html">NAS enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch03.html#id-1.4.4">NAS Indications</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Event-Report-indication.html">NAS Event Report indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Network-Time-indication.html">NAS Network Time indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Serving-System-indication.html">NAS Serving System indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-System-Info-indication.html">NAS System Info indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Signal-Info-indication.html">NAS Signal Info indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Operator-Name-indication.html">NAS Operator Name indication</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+<dt><span class="section"><a href="ch03s02.html">NAS Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Reset-request.html">NAS Reset request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Set-Event-Report-request.html">NAS Set Event Report request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Register-Indications-request.html">NAS Register Indications request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-Signal-Strength-request.html">NAS Get Signal Strength request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Network-Scan-request.html">NAS Network Scan request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Initiate-Network-Register-request.html">NAS Initiate Network Register request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Attach-Detach-request.html">NAS Attach Detach request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-Serving-System-request.html">NAS Get Serving System request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-Home-Network-request.html">NAS Get Home Network request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Set-Technology-Preference-request.html">NAS Set Technology Preference request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-Technology-Preference-request.html">NAS Get Technology Preference request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-RF-Band-Information-request.html">NAS Get RF Band Information request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Set-System-Selection-Preference-request.html">NAS Set System Selection Preference request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-System-Selection-Preference-request.html">NAS Get System Selection Preference request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-System-Info-request.html">NAS Get System Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-Signal-Info-request.html">NAS Get Signal Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Config-Signal-Info-request.html">NAS Config Signal Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Force-Network-Search-request.html">NAS Force Network Search request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-CDMA-Position-Info-request.html">NAS Get CDMA Position Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-Tx-Rx-Info-request.html">NAS Get Tx Rx Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-Cell-Location-Info-request.html">NAS Get Cell Location Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-Supported-Messages-request.html">NAS Get Supported Messages request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-LTE-Cphy-CA-Info-request.html">NAS Get LTE Cphy CA Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Get-Operator-Name-request.html">NAS Get Operator Name request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-NAS-Swi-Get-Status-request.html">NAS Swi Get Status request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch04.html">Wireless Data Service (WDS)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientWds.html">QmiClientWds</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the WDS service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-enumerations-and-flags.html">WDS enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch04.html#id-1.5.4">WDS Indications</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Event-Report-indication.html">WDS Event Report indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Packet-Service-Status-indication.html">WDS Packet Service Status indication</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+<dt><span class="section"><a href="ch04s02.html">WDS Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Reset-request.html">WDS Reset request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Set-Event-Report-request.html">WDS Set Event Report request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Start-Network-request.html">WDS Start Network request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Stop-Network-request.html">WDS Stop Network request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Packet-Service-Status-request.html">WDS Get Packet Service Status request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Packet-Statistics-request.html">WDS Get Packet Statistics request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Go-Dormant-request.html">WDS Go Dormant request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Go-Active-request.html">WDS Go Active request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Create-Profile-request.html">WDS Create Profile request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Modify-Profile-request.html">WDS Modify Profile request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Delete-Profile-request.html">WDS Delete Profile request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Profile-List-request.html">WDS Get Profile List request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Profile-Settings-request.html">WDS Get Profile Settings request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Default-Profile-Num-request.html">WDS Get Default Profile Num request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Set-Default-Profile-Num-request.html">WDS Set Default Profile Num request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Default-Settings-request.html">WDS Get Default Settings request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Current-Settings-request.html">WDS Get Current Settings request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Dormancy-Status-request.html">WDS Get Dormancy Status request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Autoconnect-Settings-request.html">WDS Get Autoconnect Settings request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Set-Autoconnect-Settings-request.html">WDS Set Autoconnect Settings request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Data-Bearer-Technology-request.html">WDS Get Data Bearer Technology request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Current-Data-Bearer-Technology-request.html">WDS Get Current Data Bearer Technology request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Set-IP-Family-request.html">WDS Set IP Family request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Supported-Messages-request.html">WDS Get Supported Messages request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-PDN-Throttle-Info-request.html">WDS Get PDN Throttle Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Bind-Mux-Data-Port-request.html">WDS Bind Mux Data Port request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Get-Channel-Rates-request.html">WDS Get Channel Rates request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDS-Swi-Create-Profile-Indexed-request.html">WDS Swi Create Profile Indexed request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch05.html">Wireless Messaging Service (WMS)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientWms.html">QmiClientWms</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the WMS service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-enumerations-and-flags.html">WMS enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch05.html#id-1.6.4">WMS Indications</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Event-Report-indication.html">WMS Event Report indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-SMSC-Address-indication.html">WMS SMSC Address indication</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+<dt><span class="section"><a href="ch05s02.html">WMS Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Reset-request.html">WMS Reset request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Set-Event-Report-request.html">WMS Set Event Report request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Raw-Send-request.html">WMS Raw Send request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Raw-Write-request.html">WMS Raw Write request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Raw-Read-request.html">WMS Raw Read request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Modify-Tag-request.html">WMS Modify Tag request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Delete-request.html">WMS Delete request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Get-Message-Protocol-request.html">WMS Get Message Protocol request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-List-Messages-request.html">WMS List Messages request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Set-Routes-request.html">WMS Set Routes request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Get-Routes-request.html">WMS Get Routes request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Send-From-Memory-Storage-request.html">WMS Send From Memory Storage request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WMS-Get-Supported-Messages-request.html">WMS Get Supported Messages request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch06.html">Persistent Device Configuration (PDC)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientPdc.html">QmiClientPdc</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the PDC service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-enumerations-and-flags.html">PDC enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch06.html#id-1.7.4">PDC Indications</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Activate-Config-indication.html">PDC Activate Config indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Deactivate-Config-indication.html">PDC Deactivate Config indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Get-Config-Info-indication.html">PDC Get Config Info indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Get-Selected-Config-indication.html">PDC Get Selected Config indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-List-Configs-indication.html">PDC List Configs indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Load-Config-indication.html">PDC Load Config indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Set-Selected-Config-indication.html">PDC Set Selected Config indication</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+<dt><span class="section"><a href="ch06s02.html">PDC Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Reset-request.html">PDC Reset request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Register-request.html">PDC Register request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Config-Change-request.html">PDC Config Change request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Get-Selected-Config-request.html">PDC Get Selected Config request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Set-Selected-Config-request.html">PDC Set Selected Config request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-List-Configs-request.html">PDC List Configs request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Delete-Config-request.html">PDC Delete Config request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Load-Config-request.html">PDC Load Config request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Activate-Config-request.html">PDC Activate Config request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Get-Config-Info-request.html">PDC Get Config Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Get-Config-Limits-request.html">PDC Get Config Limits request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Get-Default-Config-Info-request.html">PDC Get Default Config Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDC-Deactivate-Config-request.html">PDC Deactivate Config request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch07.html">Position Determination Service (PDS)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientPds.html">QmiClientPds</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the PDS service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-enumerations-and-flags.html">PDS enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch07.html#id-1.8.4">PDS Indications</a></span></dt>
+<dd><dl><dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-Event-Report-indication.html">PDS Event Report indication</a></span><span class="refpurpose"></span>
+</dt></dl></dd>
+<dt><span class="section"><a href="ch07s02.html">PDS Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-Reset-request.html">PDS Reset request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-Set-Event-Report-request.html">PDS Set Event Report request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-Get-GPS-Service-State-request.html">PDS Get GPS Service State request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-Set-GPS-Service-State-request.html">PDS Set GPS Service State request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-Get-Auto-Tracking-State-request.html">PDS Get Auto Tracking State request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-Set-Auto-Tracking-State-request.html">PDS Set Auto Tracking State request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-Get-Default-Tracking-Session-request.html">PDS Get Default Tracking Session request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-Set-Default-Tracking-Session-request.html">PDS Set Default Tracking Session request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-Get-AGPS-Config-request.html">PDS Get AGPS Config request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PDS-Set-AGPS-Config-request.html">PDS Set AGPS Config request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch08.html">Phonebook Management Service (PBM)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientPbm.html">QmiClientPbm</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the PBM service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PBM-enumerations-and-flags.html">PBM enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch08.html#id-1.9.4">PBM Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PBM-Indication-Register-request.html">PBM Indication Register request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PBM-Get-Capabilities-request.html">PBM Get Capabilities request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-PBM-Get-All-Capabilities-request.html">PBM Get All Capabilities request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch09.html">User Identity Module (UIM) service</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientUim.html">QmiClientUim</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the UIM service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-enumerations-and-flags.html">UIM enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch09.html#id-1.10.4">UIM Indications</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Card-Status-indication.html">UIM Card Status indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Slot-Status-indication.html">UIM Slot Status indication</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+<dt><span class="section"><a href="ch09s02.html">UIM Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Reset-request.html">UIM Reset request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Register-Events-request.html">UIM Register Events request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Set-PIN-Protection-request.html">UIM Set PIN Protection request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Verify-PIN-request.html">UIM Verify PIN request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Unblock-PIN-request.html">UIM Unblock PIN request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Change-PIN-request.html">UIM Change PIN request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Read-Transparent-request.html">UIM Read Transparent request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Read-Record-request.html">UIM Read Record request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Get-File-Attributes-request.html">UIM Get File Attributes request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Get-Card-Status-request.html">UIM Get Card Status request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Get-Supported-Messages-request.html">UIM Get Supported Messages request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Power-Off-SIM-request.html">UIM Power Off SIM request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Power-On-SIM-request.html">UIM Power On SIM request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Change-Provisioning-Session-request.html">UIM Change Provisioning Session request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Switch-Slot-request.html">UIM Switch Slot request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-UIM-Get-Slot-Status-request.html">UIM Get Slot Status request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch10.html">Open Mobile Alliance Service (OMA)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientOma.html">QmiClientOma</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the OMA service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-OMA-enumerations-and-flags.html">OMA enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch10.html#id-1.11.4">OMA Indications</a></span></dt>
+<dd><dl><dt>
+<span class="refentrytitle"><a href="libqmi-glib-OMA-Event-Report-indication.html">OMA Event Report indication</a></span><span class="refpurpose"></span>
+</dt></dl></dd>
+<dt><span class="section"><a href="ch10s02.html">OMA Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-OMA-Reset-request.html">OMA Reset request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-OMA-Set-Event-Report-request.html">OMA Set Event Report request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-OMA-Start-Session-request.html">OMA Start Session request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-OMA-Cancel-Session-request.html">OMA Cancel Session request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-OMA-Get-Session-Info-request.html">OMA Get Session Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-OMA-Send-Selection-request.html">OMA Send Selection request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-OMA-Get-Feature-Setting-request.html">OMA Get Feature Setting request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-OMA-Set-Feature-Setting-request.html">OMA Set Feature Setting request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch11.html">Wireless Data Administrative Service (WDA)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientWda.html">QmiClientWda</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the WDA service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDA-enumerations-and-flags.html">WDA enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch11.html#id-1.12.4">WDA Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDA-Set-Data-Format-request.html">WDA Set Data Format request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDA-Get-Data-Format-request.html">WDA Get Data Format request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-WDA-Get-Supported-Messages-request.html">WDA Get Supported Messages request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch12.html">Voice</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientVoice.html">QmiClientVoice</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the VOICE service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-Voice-enumerations-and-flags.html">Voice enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch12.html#id-1.13.4">Voice Indications</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-All-Call-Status-indication.html">VOICE All Call Status indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-Release-USSD-indication.html">VOICE Release USSD indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-USSD-indication.html">VOICE USSD indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-Originate-USSD-No-Wait-indication.html">VOICE Originate USSD No Wait indication</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+<dt><span class="section"><a href="ch12s02.html">Voice Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-Indication-Register-request.html">VOICE Indication Register request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-Dial-Call-request.html">VOICE Dial Call request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-End-Call-request.html">VOICE End Call request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-Answer-Call-request.html">VOICE Answer Call request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-Get-Config-request.html">VOICE Get Config request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-Get-Supported-Messages-request.html">VOICE Get Supported Messages request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-Originate-USSD-request.html">VOICE Originate USSD request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-Answer-USSD-request.html">VOICE Answer USSD request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-Cancel-USSD-request.html">VOICE Cancel USSD request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-VOICE-Originate-USSD-No-Wait-request.html">VOICE Originate USSD No Wait request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch13.html">Location Service (LOC)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientLoc.html">QmiClientLoc</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the LOC service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-enumerations-and-flags.html">LOC enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch13.html#id-1.14.4">LOC Indications</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Position-Report-indication.html">LOC Position Report indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-NMEA-indication.html">LOC NMEA indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-GNSS-Sv-Info-indication.html">LOC GNSS Sv Info indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Engine-State-indication.html">LOC Engine State indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Fix-Recurrence-Type-indication.html">LOC Fix Recurrence Type indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Get-Operation-Mode-indication.html">LOC Get Operation Mode indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Set-Operation-Mode-indication.html">LOC Set Operation Mode indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Set-NMEA-Types-indication.html">LOC Set NMEA Types indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Get-NMEA-Types-indication.html">LOC Get NMEA Types indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Set-Server-indication.html">LOC Set Server indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Get-Server-indication.html">LOC Get Server indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Inject-Predicted-Orbits-Data-indication.html">LOC Inject Predicted Orbits Data indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Get-Predicted-Orbits-Data-Source-indication.html">LOC Get Predicted Orbits Data Source indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Delete-Assistance-Data-indication.html">LOC Delete Assistance Data indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Inject-Xtra-Data-indication.html">LOC Inject Xtra Data indication</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+<dt><span class="section"><a href="ch13s02.html">LOC Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Start-request.html">LOC Start request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Stop-request.html">LOC Stop request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Register-Events-request.html">LOC Register Events request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Get-Operation-Mode-request.html">LOC Get Operation Mode request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Set-Operation-Mode-request.html">LOC Set Operation Mode request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Set-NMEA-Types-request.html">LOC Set NMEA Types request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Get-NMEA-Types-request.html">LOC Get NMEA Types request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Set-Server-request.html">LOC Set Server request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Get-Server-request.html">LOC Get Server request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Inject-Predicted-Orbits-Data-request.html">LOC Inject Predicted Orbits Data request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Get-Predicted-Orbits-Data-Source-request.html">LOC Get Predicted Orbits Data Source request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Delete-Assistance-Data-request.html">LOC Delete Assistance Data request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-LOC-Inject-Xtra-Data-request.html">LOC Inject Xtra Data request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch14.html">QoS Service (QoS)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientQos.html">QmiClientQos</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the QOS service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-QOS-enumerations-and-flags.html">QOS enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch14.html#id-1.15.4">QoS Indications</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-QOS-Flow-Status-indication.html">QOS Flow Status indication</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-QOS-Network-Status-indication.html">QOS Network Status indication</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+<dt><span class="section"><a href="ch14s02.html">QoS Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-QOS-Reset-request.html">QOS Reset request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-QOS-Get-Flow-Status-request.html">QOS Get Flow Status request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-QOS-Get-Network-Status-request.html">QOS Get Network Status request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-QOS-Swi-Read-Data-Stats-request.html">QOS Swi Read Data Stats request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch15.html">General Application Service (GAS)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientGas.html">QmiClientGas</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the GAS service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-GAS-enumerations-and-flags.html">GAS enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch15.html#id-1.16.4">GAS Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-GAS-DMS-Get-Firmware-List-request.html">GAS DMS Get Firmware List request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-GAS-DMS-Set-Active-Firmware-request.html">GAS DMS Set Active Firmware request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch16.html">General Modem Service (GMS)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientGms.html">QmiClientGms</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the GMS service.</span>
+</dt>
+<dt><span class="section"><a href="ch16.html#id-1.17.3">GMS Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-GMS-Test-Set-Value-request.html">GMS Test Set Value request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-GMS-Test-Get-Value-request.html">GMS Test Get Value request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch17.html">Data System Determination (DSD)</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="QmiClientDsd.html">QmiClientDsd</a></span><span class="refpurpose"> — <span class="type">QmiClient</span> for the DSD service.</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DSD-enumerations-and-flags.html">DSD enumerations and flags</a></span><span class="refpurpose"></span>
+</dt>
+<dt><span class="section"><a href="ch17.html#id-1.18.4">DSD Requests</a></span></dt>
+<dd><dl>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DSD-Get-APN-Info-request.html">DSD Get APN Info request</a></span><span class="refpurpose"></span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="libqmi-glib-DSD-Set-APN-Type-request.html">DSD Set APN Type request</a></span><span class="refpurpose"></span>
+</dt>
+</dl></dd>
+</dl></dd>
+<dt><span class="chapter"><a href="ch18.html">Compatibility with older versions</a></span></dt>
+<dd><dl><dt>
+<span class="refentrytitle"><a href="libqmi-glib-Deprecated-Interface.html">Deprecated Interface</a></span><span class="refpurpose"> — Deprecated types and methods.</span>
+</dt></dl></dd>
+<dt><span class="chapter"><a href="object-tree.html">Object Hierarchy</a></span></dt>
+<dt><span class="chapter"><a href="api-index-full.html">Index</a></span></dt>
+<dt><span class="chapter"><a href="api-index-deprecated.html">Index of deprecated symbols</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-0.html">Index of new symbols in 1.0</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-4.html">Index of new symbols in 1.4</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-6.html">Index of new symbols in 1.6</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-8.html">Index of new symbols in 1.8</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-10.html">Index of new symbols in 1.10</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-12.html">Index of new symbols in 1.12</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-14.html">Index of new symbols in 1.14</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-16.html">Index of new symbols in 1.16</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-18.html">Index of new symbols in 1.18</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-20.html">Index of new symbols in 1.20</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-22.html">Index of new symbols in 1.22</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-22-4.html">Index of new symbols in 1.22.4</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-24.html">Index of new symbols in 1.24</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-24-6.html">Index of new symbols in 1.24.6</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-26.html">Index of new symbols in 1.26</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-26-2.html">Index of new symbols in 1.26.2</a></span></dt>
+<dt><span class="chapter"><a href="api-index-1-26-6.html">Index of new symbols in 1.26.6</a></span></dt>
+<dt><span class="glossary"><a href="annotation-glossary.html">Annotation Glossary</a></span></dt>
+</dl></div>
+</div>
+<div class="footer">
+<hr>Generated by GTK-Doc V1.33.1</div>
+</body>
+</html>
