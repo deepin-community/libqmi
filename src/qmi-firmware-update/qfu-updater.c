@@ -31,7 +31,7 @@
 #include "qfu-updater.h"
 #include "qfu-reseter.h"
 #include "qfu-utils.h"
-#include "qfu-udev-helpers.h"
+#include "qfu-helpers.h"
 #include "qfu-qdl-device.h"
 #include "qfu-sahara-device.h"
 #include "qfu-enum-types.h"
@@ -42,16 +42,13 @@ G_DEFINE_TYPE (QfuUpdater, qfu_updater, G_TYPE_OBJECT)
 
 typedef enum {
     UPDATER_TYPE_UNKNOWN,
-#if defined WITH_UDEV
     UPDATER_TYPE_GENERIC,
-#endif
     UPDATER_TYPE_DOWNLOAD,
 } UpdaterType;
 
 struct _QfuUpdaterPrivate {
     UpdaterType         type;
     QfuDeviceSelection *device_selection;
-#if defined WITH_UDEV
     gchar              *firmware_version;
     gchar              *config_version;
     gchar              *carrier;
@@ -60,7 +57,6 @@ struct _QfuUpdaterPrivate {
     gboolean            override_download;
     guint8              modem_storage_index;
     gboolean            skip_validation;
-#endif
 };
 
 /******************************************************************************/
@@ -86,39 +82,32 @@ static const gchar *progress[] = {
 #define WAIT_FOR_BOOT_RETRIES      12
 
 typedef enum {
-#if defined WITH_UDEV
     RUN_CONTEXT_STEP_QMI_CLIENT,
     RUN_CONTEXT_STEP_GET_FIRMWARE_PREFERENCE,
     RUN_CONTEXT_STEP_SET_FIRMWARE_PREFERENCE,
     RUN_CONTEXT_STEP_POWER_CYCLE,
     RUN_CONTEXT_STEP_CLEANUP_QMI_DEVICE,
     RUN_CONTEXT_STEP_WAIT_FOR_TTY,
-#endif
     RUN_CONTEXT_STEP_SELECT_DEVICE,
     RUN_CONTEXT_STEP_SELECT_IMAGE,
     RUN_CONTEXT_STEP_DOWNLOAD_IMAGE,
     RUN_CONTEXT_STEP_CLEANUP_IMAGE,
     RUN_CONTEXT_STEP_CLEANUP_DEVICE,
-#if defined WITH_UDEV
     RUN_CONTEXT_STEP_WAIT_FOR_CDC_WDM,
     RUN_CONTEXT_STEP_WAIT_FOR_BOOT,
     RUN_CONTEXT_STEP_QMI_CLIENT_AFTER,
     RUN_CONTEXT_STEP_CLEANUP_QMI_DEVICE_FULL,
-#endif
     RUN_CONTEXT_STEP_LAST
 } RunContextStep;
 
 typedef struct {
     /* Device selection */
-#if defined WITH_UDEV
     GFile *cdc_wdm_file;
-#endif
     GFile *serial_file;
 
     /* Context step */
     RunContextStep step;
 
-#if defined WITH_UDEV
     /* Old/New info and capabilities */
     gchar                                    *revision;
     gboolean                                  supports_stored_image_management;
@@ -131,14 +120,12 @@ typedef struct {
     gboolean                                  new_supports_firmware_preference_management;
     QmiMessageDmsGetFirmwarePreferenceOutput *new_firmware_preference;
     QmiMessageDmsSwiGetCurrentFirmwareOutput *new_current_firmware;
-#endif
 
     /* List of pending QfuImages to download, and the current one being
      * processed. */
     GList    *pending_images;
     QfuImage *current_image;
 
-#if defined WITH_UDEV
     /* QMI device and client */
     QmiDevice    *qmi_device;
     QmiClientDms *qmi_client;
@@ -154,7 +141,6 @@ typedef struct {
     /* Waiting for boot */
     guint wait_for_boot_seconds_elapsed;
     guint wait_for_boot_retries;
-#endif
 
     /* Device to use while already in download mode */
     QfuQdlDevice    *qdl_device;
@@ -164,7 +150,6 @@ typedef struct {
 static void
 run_context_free (RunContext *ctx)
 {
-#if defined WITH_UDEV
     if (ctx->current_firmware)
         qmi_message_dms_swi_get_current_firmware_output_unref (ctx->current_firmware);
     if (ctx->new_current_firmware)
@@ -195,7 +180,6 @@ run_context_free (RunContext *ctx)
     }
     if (ctx->cdc_wdm_file)
         g_object_unref (ctx->cdc_wdm_file);
-#endif
 
     g_clear_object (&ctx->qdl_device);
     g_clear_object (&ctx->sahara_device);
@@ -212,8 +196,6 @@ qfu_updater_run_finish (QfuUpdater    *self,
 {
     return g_task_propagate_boolean (G_TASK (res), error);
 }
-
-#if defined WITH_UDEV
 
 static void
 print_firmware_preference (QmiMessageDmsGetFirmwarePreferenceOutput *firmware_preference,
@@ -282,8 +264,6 @@ print_current_firmware (QmiMessageDmsSwiGetCurrentFirmwareOutput *current_firmwa
         g_print ("%sConfig version: %s\n", prefix, config_version);
 }
 
-#endif /* WITH_UDEV */
-
 static void
 run_context_step_last (GTask *task)
 {
@@ -301,7 +281,6 @@ run_context_step_last (GTask *task)
         return;
     }
 
-#if defined WITH_UDEV
     if (self->priv->type == UPDATER_TYPE_GENERIC) {
         g_print ("\n"
                  "------------------------------------------------------------------------\n");
@@ -353,7 +332,6 @@ run_context_step_last (GTask *task)
         g_object_unref (task);
         return;
     }
-#endif /* WITH_UDEV */
 
     g_assert_not_reached ();
 }
@@ -378,8 +356,6 @@ run_context_step_next (GTask *task, RunContextStep next)
     /* Schedule next step in an idle */
     g_idle_add ((GSourceFunc) run_context_step_cb, task);
 }
-
-#if defined WITH_UDEV
 
 static void
 run_context_step_next_no_idle (GTask *task, RunContextStep next)
@@ -620,8 +596,6 @@ run_context_step_wait_for_cdc_wdm (GTask *task)
                                            (GAsyncReadyCallback) wait_for_cdc_wdm_ready,
                                            task);
 }
-
-#endif /* WITH_UDEV */
 
 static void
 run_context_step_cleanup_device (GTask *task)
@@ -888,8 +862,6 @@ run_context_step_select_device (GTask *task)
     run_context_step_next (task, ctx->step + 1);
 }
 
-#if defined WITH_UDEV
-
 static void
 wait_for_tty_ready (QfuDeviceSelection *device_selection,
                     GAsyncResult       *res,
@@ -904,14 +876,14 @@ wait_for_tty_ready (QfuDeviceSelection *device_selection,
     g_assert (!ctx->serial_file);
     ctx->serial_file = qfu_device_selection_wait_for_tty_finish (device_selection, res, &error);
     if (!ctx->serial_file) {
-        g_prefix_error (&error, "error waiting for TTY: ");
+        g_prefix_error (&error, "error waiting for serial device in download mode: ");
         g_task_return_error (task, error);
         g_object_unref (task);
         return;
     }
 
     path = g_file_get_path (ctx->serial_file);
-    g_debug ("[qfu-updater] TTY device found: %s", path);
+    g_debug ("[qfu-updater] serial device in download mode found: %s", path);
     g_free (path);
 
     g_print ("download mode detected\n");
@@ -929,8 +901,9 @@ run_context_step_wait_for_tty (GTask *task)
 
     g_print ("rebooting in download mode...\n");
 
-    g_debug ("[qfu-updater] reset requested, now waiting for TTY device...");
+    g_debug ("[qfu-updater] reset requested, now waiting for serial device...");
     qfu_device_selection_wait_for_tty (self->priv->device_selection,
+                                       QFU_HELPERS_DEVICE_MODE_DOWNLOAD,
                                        g_task_get_cancellable (task),
                                        (GAsyncReadyCallback) wait_for_tty_ready,
                                        task);
@@ -1446,29 +1419,23 @@ run_context_step_qmi_client (GTask *task)
                               task);
 }
 
-#endif /* WITH_UDEV */
-
 typedef void (* RunContextStepFunc) (GTask *task);
 static const RunContextStepFunc run_context_step_func[] = {
-#if defined WITH_UDEV
     [RUN_CONTEXT_STEP_QMI_CLIENT]              = run_context_step_qmi_client,
     [RUN_CONTEXT_STEP_GET_FIRMWARE_PREFERENCE] = run_context_step_get_firmware_preference,
     [RUN_CONTEXT_STEP_SET_FIRMWARE_PREFERENCE] = run_context_step_set_firmware_preference,
     [RUN_CONTEXT_STEP_POWER_CYCLE]             = run_context_step_power_cycle,
     [RUN_CONTEXT_STEP_CLEANUP_QMI_DEVICE]      = run_context_step_cleanup_qmi_device,
     [RUN_CONTEXT_STEP_WAIT_FOR_TTY]            = run_context_step_wait_for_tty,
-#endif
     [RUN_CONTEXT_STEP_SELECT_DEVICE]           = run_context_step_select_device,
     [RUN_CONTEXT_STEP_SELECT_IMAGE]            = run_context_step_select_image,
     [RUN_CONTEXT_STEP_DOWNLOAD_IMAGE]          = run_context_step_download_image,
     [RUN_CONTEXT_STEP_CLEANUP_IMAGE]           = run_context_step_cleanup_image,
     [RUN_CONTEXT_STEP_CLEANUP_DEVICE]          = run_context_step_cleanup_device,
-#if defined WITH_UDEV
     [RUN_CONTEXT_STEP_WAIT_FOR_CDC_WDM]        = run_context_step_wait_for_cdc_wdm,
     [RUN_CONTEXT_STEP_WAIT_FOR_BOOT]           = run_context_step_wait_for_boot,
     [RUN_CONTEXT_STEP_QMI_CLIENT_AFTER]        = run_context_step_qmi_client_after,
     [RUN_CONTEXT_STEP_CLEANUP_QMI_DEVICE_FULL] = run_context_step_cleanup_qmi_device_full,
-#endif
 };
 
 G_STATIC_ASSERT (G_N_ELEMENTS (run_context_step_func) == RUN_CONTEXT_STEP_LAST);
@@ -1552,7 +1519,6 @@ qfu_updater_run (QfuUpdater          *self,
     }
 
     switch (self->priv->type) {
-#if defined WITH_UDEV
     case UPDATER_TYPE_GENERIC:
         ctx->step = RUN_CONTEXT_STEP_QMI_CLIENT;
         ctx->cdc_wdm_file = qfu_device_selection_get_single_cdc_wdm (self->priv->device_selection);
@@ -1563,13 +1529,12 @@ qfu_updater_run (QfuUpdater          *self,
             return;
         }
         break;
-#endif
     case UPDATER_TYPE_DOWNLOAD:
         ctx->step = RUN_CONTEXT_STEP_SELECT_DEVICE;
-        ctx->serial_file = qfu_device_selection_get_single_tty (self->priv->device_selection);
+        ctx->serial_file = qfu_device_selection_get_single_tty (self->priv->device_selection, QFU_HELPERS_DEVICE_MODE_DOWNLOAD);
         if (!ctx->serial_file) {
             g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                                     "No serial device found to run QDL update operation");
+                                     "No serial device in download mode found to run QDL update operation");
             g_object_unref (task);
             return;
         }
@@ -1583,8 +1548,6 @@ qfu_updater_run (QfuUpdater          *self,
 }
 
 /******************************************************************************/
-
-#if defined WITH_UDEV
 
 QfuUpdater *
 qfu_updater_new (QfuDeviceSelection *device_selection,
@@ -1615,8 +1578,6 @@ qfu_updater_new (QfuDeviceSelection *device_selection,
 
     return self;
 }
-
-#endif
 
 QfuUpdater *
 qfu_updater_new_download (QfuDeviceSelection *device_selection)
@@ -1652,13 +1613,11 @@ dispose (GObject *object)
 static void
 finalize (GObject *object)
 {
-#if defined WITH_UDEV
     QfuUpdater *self = QFU_UPDATER (object);
 
     g_free (self->priv->firmware_version);
     g_free (self->priv->config_version);
     g_free (self->priv->carrier);
-#endif
 
     G_OBJECT_CLASS (qfu_updater_parent_class)->finalize (object);
 }

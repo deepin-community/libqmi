@@ -1,32 +1,39 @@
 Source: libqmi
 Priority: optional
-Maintainer: Mathieu Trudel-Lapierre <mathieu.tl@gmail.com>
-Build-Depends: debhelper-compat (= 12),
-               autoconf-archive,
+Maintainer: DebianOnMobile Maintainers <debian-on-mobile-maintainers@alioth-lists.debian.net>
+Uploaders: Arnaud Ferraris <aferraris@debian.org>,
+           Guido Günther <agx@sigxcpu.org>,
+           Henry-Nicolas Tourneur <debian@nilux.be>,
+           Martin <debacle@debian.org>
+Build-Depends: debhelper-compat (= 13),
+               bash-completion,
                gobject-introspection,
-               gtk-doc-tools,
-               libmbim-glib-dev (>= 1.18.0),
+               gtk-doc-tools <!nodoc>,
+               help2man,
                libgirepository1.0-dev,
-               libgudev-1.0-dev (>= 147),
-               libglib2.0-dev (>= 2.36),
+               libglib2.0-dev,
+               libgudev-1.0-dev,
+               libmbim-glib-dev,
+               libqrtr-glib-dev (>= 1.0.0),
+               meson,
                pkg-config,
-               python3:any
 Build-Depends-Indep: libglib2.0-doc <!nodoc>
-Standards-Version: 4.5.0
+Standards-Version: 4.6.1
 Rules-Requires-Root: no
 Section: libs
 Homepage: https://www.freedesktop.org/wiki/Software/libqmi
-Vcs-Git: https://salsa.debian.org/debian/libqmi.git
-Vcs-Browser: https://salsa.debian.org/debian/libqmi
+Vcs-Git: https://salsa.debian.org/DebianOnMobile-team/libqmi.git
+Vcs-Browser: https://salsa.debian.org/DebianOnMobile-team/libqmi
 
 Package: libqmi-glib-dev
 Section: libdevel
 Architecture: linux-any
 Multi-Arch: same
-Depends: libglib2.0-dev,
-         libqmi-glib5 (= ${binary:Version}),
+Depends: ${misc:Depends},
          gir1.2-qmi-1.0 (= ${binary:Version}),
-         ${misc:Depends},
+         libqmi-glib5 (= ${binary:Version}),
+         libglib2.0-dev,
+         libqrtr-glib-dev,
 Suggests: libqmi-glib-doc,
 Description: Header files for adding QMI support to applications that use glib
  This package contains the header and pkg-config files for development

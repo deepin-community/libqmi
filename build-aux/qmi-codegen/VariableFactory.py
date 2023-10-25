@@ -15,7 +15,7 @@
 # Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 # Copyright (C) 2012 Lanedo GmbH
-# Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>
+# Copyright (C) 2012-2022 Aleksander Morgado <aleksander@aleksander.es>
 #
 
 import utils
@@ -30,18 +30,18 @@ from VariableArray import VariableArray
 Helps in the creation of Variable objects based on the specific 'format' found
 in the given dictionary
 """
-def create_variable(dictionary, new_type_name, container_type):
+def create_variable(service, dictionary, new_type_name, container_type):
     if utils.format_is_integer(dictionary['format']):
-        return VariableInteger(dictionary)
+        return VariableInteger(service, dictionary)
     elif utils.format_is_float(dictionary['format']):
-        return VariableInteger(dictionary)
+        return VariableInteger(service, dictionary)
     elif dictionary['format'] == 'string':
-        return VariableString(dictionary)
+        return VariableString(service, dictionary)
     elif dictionary['format'] == 'struct':
-        return VariableStruct(dictionary, new_type_name, container_type)
+        return VariableStruct(service, dictionary, new_type_name, container_type)
     elif dictionary['format'] == 'sequence':
-        return VariableSequence(dictionary, new_type_name, container_type)
+        return VariableSequence(service, dictionary, new_type_name, container_type)
     elif dictionary['format'] == 'array':
-        return VariableArray(dictionary, new_type_name, container_type)
+        return VariableArray(service, dictionary, new_type_name, container_type)
     else:
         raise RuntimeError('Unexpected field format \'%s\'' % dictionary['format'])

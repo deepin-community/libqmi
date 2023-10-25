@@ -15,7 +15,8 @@
 # Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 # Copyright (C) 2012 Lanedo GmbH
-# Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>
+# Copyright (C) 2012-2022 Aleksander Morgado <aleksander@aleksander.es>
+# Copyright (c) 2022 Qualcomm Innovation Center, Inc.
 #
 
 import string
@@ -33,13 +34,10 @@ Variable type for signed/unsigned Integers and floating point numbers:
 """
 class VariableInteger(Variable):
 
-    """
-    Constructor
-    """
-    def __init__(self, dictionary):
+    def __init__(self, service, dictionary):
 
         # Call the parent constructor
-        Variable.__init__(self, dictionary)
+        Variable.__init__(self, service, dictionary)
 
         self.guint_sized_size = ''
         if self.format == "guint-sized":
@@ -52,12 +50,14 @@ class VariableInteger(Variable):
         else:
             self.private_format = self.format
             self.public_format = dictionary['public-format'] if 'public-format' in dictionary else self.private_format
-
         self.element_type = self.public_format
 
-    """
-    Read a single integer from the raw byte buffer
-    """
+        # Public format for the GIR array compat methods in 1.32
+        self.private_format_gir = self.private_format
+        self.public_format_gir = self.public_format
+        self.element_type_gir = self.element_type
+
+
     def emit_buffer_read(self, f, line_prefix, tlv_out, error, variable_name):
         translations = { 'lp'             : line_prefix,
                          'tlv_out'        : tlv_out,
@@ -96,9 +96,6 @@ class VariableInteger(Variable):
         f.write(string.Template(template).substitute(translations))
 
 
-    """
-    Return the data type size of fixed c-types
-    """
     @staticmethod
     def fixed_type_byte_size(fmt):
         if fmt == 'guint8':
@@ -119,9 +116,7 @@ class VariableInteger(Variable):
             return 8
         raise Exception("Unsupported format %s" % (fmt))
 
-    """
-    Write a single integer to the raw byte buffer
-    """
+
     def emit_buffer_write(self, f, line_prefix, tlv_name, variable_name):
         translations = { 'lp'             : line_prefix,
                          'private_format' : self.private_format,
@@ -163,10 +158,7 @@ class VariableInteger(Variable):
         f.write(string.Template(template).substitute(translations))
 
 
-    """
-    Get the integer as a printable string.
-    """
-    def emit_get_printable(self, f, line_prefix):
+    def emit_get_printable(self, f, line_prefix, is_personal):
         common_format = ''
         common_cast = ''
 
@@ -223,56 +215,66 @@ class VariableInteger(Variable):
                 '${lp}    if (!qmi_message_tlv_read_${private_format} (message, init_offset, &offset,${endian} &tmp, &error))\n'
                 '${lp}        goto out;\n')
 
+        if self.personal_info or is_personal:
+            translations['if_show_field'] = 'if (qmi_utils_get_show_personal_info ()) '
+        else:
+            translations['if_show_field'] = ''
+
+        template += (
+            '${lp}    ${if_show_field}{\n')
         if self.public_format == 'gboolean':
             template += (
-                '${lp}    g_string_append_printf (printable, "%s", tmp ? "yes" : "no");\n')
+                '${lp}        g_string_append_printf (printable, "%s", tmp ? "yes" : "no");\n')
         elif self.public_format != self.private_format:
             translations['public_type_underscore'] = utils.build_underscore_name_from_camelcase(self.public_format)
             translations['public_type_underscore_upper'] = utils.build_underscore_name_from_camelcase(self.public_format).upper()
             template += (
                 '#if defined  __${public_type_underscore_upper}_IS_ENUM__\n'
-                '${lp}    g_string_append_printf (printable, "%s", ${public_type_underscore}_get_string ((${public_format})tmp));\n'
+                '${lp}        g_string_append_printf (printable, "%s", ${public_type_underscore}_get_string ((${public_format})tmp));\n'
                 '#elif defined  __${public_type_underscore_upper}_IS_FLAGS__\n'
-                '${lp}    {\n'
-                '${lp}        g_autofree gchar *flags_str = NULL;\n'
+                '${lp}        {\n'
+                '${lp}            g_autofree gchar *flags_str = NULL;\n'
                 '\n'
-                '${lp}        flags_str = ${public_type_underscore}_build_string_from_mask ((${public_format})tmp);\n'
-                '${lp}        g_string_append_printf (printable, "%s", flags_str);\n'
-                '${lp}    }\n'
+                '${lp}            flags_str = ${public_type_underscore}_build_string_from_mask ((${public_format})tmp);\n'
+                '${lp}            g_string_append_printf (printable, "%s", flags_str);\n'
+                '${lp}        }\n'
                 '#else\n'
                 '# error unexpected public format: ${public_format}\n'
                 '#endif\n')
         else:
             template += (
-                '${lp}    g_string_append_printf (printable, "${common_format}", ${common_cast}tmp);\n')
+                '${lp}        g_string_append_printf (printable, "${common_format}", ${common_cast}tmp);\n')
+
+        if self.personal_info or is_personal:
+            template += (
+                '${lp}    } else {\n'
+                '${lp}        g_string_append_printf (printable, "\'###\'");\n')
 
         template += (
+            '${lp}    }\n'
             '${lp}}\n')
 
         f.write(string.Template(template).substitute(translations))
 
 
-    """
-    Variable declaration
-    """
-    def build_variable_declaration(self, public, line_prefix, variable_name):
+    def build_variable_declaration(self, line_prefix, variable_name):
         translations = { 'lp'             : line_prefix,
                          'private_format' : self.private_format,
-                         'public_format'  : self.public_format,
                          'name'           : variable_name }
-        template = ''
-        if public:
-            template += (
-                '${lp}${public_format} ${name};\n')
-        else:
-            template += (
-                '${lp}${private_format} ${name};\n')
+        template = (
+            '${lp}${private_format} ${name};\n')
         return string.Template(template).substitute(translations)
 
 
-    """
-    Getter for the integer type
-    """
+    def build_struct_field_declaration(self, line_prefix, variable_name):
+        translations = { 'lp'            : line_prefix,
+                         'public_format' : self.public_format,
+                         'name'          : variable_name }
+        template = (
+            '${lp}${public_format} ${name};\n')
+        return string.Template(template).substitute(translations)
+
+
     def build_getter_declaration(self, line_prefix, variable_name):
         if not self.visible:
             return ""
@@ -286,9 +288,6 @@ class VariableInteger(Variable):
         return string.Template(template).substitute(translations)
 
 
-    """
-    Documentation for the getter
-    """
     def build_getter_documentation(self, line_prefix, variable_name):
         if not self.visible:
             return ""
@@ -298,13 +297,11 @@ class VariableInteger(Variable):
                          'name'          : variable_name }
 
         template = (
-            '${lp}@${name}: (out): a placeholder for the output #${public_format}, or %NULL if not required.\n')
+            '${lp}@${name}: (out)(optional): a placeholder for the output #${public_format}, or %NULL if not required.\n')
         return string.Template(template).substitute(translations)
 
-    """
-    Builds the Integer getter implementation
-    """
-    def build_getter_implementation(self, line_prefix, variable_name_from, variable_name_to, to_is_reference):
+
+    def build_getter_implementation(self, line_prefix, variable_name_from, variable_name_to):
         if not self.visible:
             return ""
 
@@ -315,20 +312,12 @@ class VariableInteger(Variable):
                          'cast_ini' : '(' + self.public_format + ')(' if needs_cast else '',
                          'cast_end' : ')' if needs_cast else '' }
 
-        if to_is_reference:
-            template = (
-                '${lp}if (${to})\n'
-                '${lp}    *${to} = ${cast_ini}${from}${cast_end};\n')
-            return string.Template(template).substitute(translations)
-        else:
-            template = (
-                '${lp}${to} = ${cast_ini}${from}${cast_end};\n')
-            return string.Template(template).substitute(translations)
+        template = (
+            '${lp}if (${to})\n'
+            '${lp}    *${to} = ${cast_ini}${from}${cast_end};\n')
+        return string.Template(template).substitute(translations)
 
 
-    """
-    Setter for the integer type
-    """
     def build_setter_declaration(self, line_prefix, variable_name):
         if not self.visible:
             return ""
@@ -342,9 +331,6 @@ class VariableInteger(Variable):
         return string.Template(template).substitute(translations)
 
 
-    """
-    Documentation for the setter
-    """
     def build_setter_documentation(self, line_prefix, variable_name):
         if not self.visible:
             return ""
@@ -358,9 +344,6 @@ class VariableInteger(Variable):
         return string.Template(template).substitute(translations)
 
 
-    """
-    Implementation of the setter
-    """
     def build_setter_implementation(self, line_prefix, variable_name_from, variable_name_to):
         if not self.visible:
             return ""
@@ -377,9 +360,6 @@ class VariableInteger(Variable):
         return string.Template(template).substitute(translations)
 
 
-    """
-    Documentation for the struct field
-    """
     def build_struct_field_documentation(self, line_prefix, variable_name):
         translations = { 'lp'            : line_prefix,
                          'public_format' : self.public_format,
@@ -388,3 +368,21 @@ class VariableInteger(Variable):
         template = (
             '${lp}@${name}: a #${public_format}.\n')
         return string.Template(template).substitute(translations)
+
+
+    def build_copy_gir(self, line_prefix, variable_name_from, variable_name_to):
+        translations = { 'lp'                 : line_prefix,
+                         'variable_name_from' : variable_name_from,
+                         'variable_name_to'   : variable_name_to }
+
+        template = (
+            '${lp}${variable_name_to} = ${variable_name_from};\n')
+        return string.Template(template).substitute(translations)
+
+
+    def build_copy_to_gir(self, line_prefix, variable_name_from, variable_name_to):
+        return self.build_copy_gir (line_prefix, variable_name_from, variable_name_to)
+
+
+    def build_copy_from_gir(self, line_prefix, variable_name_from, variable_name_to):
+        return self.build_copy_gir (line_prefix, variable_name_from, variable_name_to)

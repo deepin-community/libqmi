@@ -15,7 +15,7 @@
 # Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 # Copyright (C) 2012 Lanedo GmbH
-# Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>
+# Copyright (C) 2012-2022 Aleksander Morgado <aleksander@aleksander.es>
 #
 
 import string
@@ -33,7 +33,9 @@ class Container:
     """
     Constructor
     """
-    def __init__(self, prefix, container_type, dictionary, common_objects_dictionary, static, since):
+    def __init__(self, service, prefix, container_type, dictionary, common_objects_dictionary, static, since, compat):
+        # The current QMI service
+        self.service = service
         # The field container prefix usually contains the name of the Message,
         # e.g. "Qmi Message Ctl Something"
         self.prefix = prefix
@@ -50,6 +52,7 @@ class Container:
 
         self.static = static
         self.since = since
+        self.compat = compat
 
         # Create the composed full name (prefix + name),
         #  e.g. "Qmi Message Ctl Something Output"
@@ -71,10 +74,12 @@ class Container:
                            copy = dict(common)
                            if 'prerequisites' in field_dictionary:
                                copy['prerequisites'] = field_dictionary['prerequisites']
-                           # Fix 'since' in the copy
+                           # If an explicit 'since' is given in the field, prefer it over any other one
                            if 'since' in field_dictionary:
                                copy['since'] = field_dictionary['since']
-                           else:
+                           # If the common type does not have any explicit 'since', take the one from the message
+                           # If the common type has a 'since', take it only if it is newer than the one from the message
+                           elif not 'since' in copy or utils.version_compare(copy['since'],self.since) > 0:
                                copy['since'] = self.since
                            new_dict.append(copy)
                            break
@@ -96,11 +101,11 @@ class Container:
             # Then, really parse each field
             for field_dictionary in sorted_dictionary:
                 if field_dictionary['type'] == 'TLV':
-                    if field_dictionary['format'] == 'struct' and \
+                    if field_dictionary['format'] == 'sequence' and \
                        field_dictionary['name'] == 'Result':
-                        self.fields.append(FieldResult(self.fullname, field_dictionary, common_objects_dictionary, container_type, static))
+                        self.fields.append(FieldResult(self.service, self.fullname, field_dictionary, common_objects_dictionary, container_type, static))
                     else:
-                        self.fields.append(Field(self.fullname, field_dictionary, common_objects_dictionary, container_type, static))
+                        self.fields.append(Field(self.service, self.fullname, field_dictionary, common_objects_dictionary, container_type, static))
 
 
     """
@@ -126,7 +131,7 @@ class Container:
         translations['type_macro'] = 'QMI_TYPE_' + utils.remove_prefix(utils.build_underscore_uppercase_name(self.fullname), 'QMI_')
         # Emit types header
         template = '\n'
-        if self.static == False:
+        if not self.static and self.service != 'CTL':
             template += (
                 '/**\n'
                 ' * ${camelcase}:\n'
@@ -140,6 +145,15 @@ class Container:
             'typedef struct _${camelcase} ${camelcase};\n'
             '${static}GType ${underscore}_get_type (void) G_GNUC_CONST;\n'
             '#define ${type_macro} (${underscore}_get_type ())\n')
+        if self.compat:
+            template += (
+                'G_GNUC_INTERNAL\n'
+                'gpointer ${underscore}_get_compat_context (${camelcase} *self);\n'
+                'G_GNUC_INTERNAL\n'
+                'void ${underscore}_set_compat_context (\n'
+                '    ${camelcase} *self,\n'
+                '    gpointer compat_context,\n'
+                '    GDestroyNotify compat_context_free);\n')
         hfile.write(string.Template(template).substitute(translations))
 
         # Emit types source
@@ -147,12 +161,16 @@ class Container:
             '\n'
             'struct _${camelcase} {\n'
             '    volatile gint ref_count;\n')
+        if self.compat:
+            template += (
+                '\n'
+                '    gpointer compat_context;\n'
+                '    GDestroyNotify compat_context_free;\n')
         cfile.write(string.Template(template).substitute(translations))
 
         if self.fields is not None:
             for field in self.fields:
                 if field.variable is not None:
-                    variable_declaration = field.variable.build_variable_declaration(False, '    ', field.variable_name)
                     translations['field_variable_name'] = field.variable_name
                     translations['field_name'] = field.name
                     template = (
@@ -160,7 +178,7 @@ class Container:
                         '    /* ${field_name} */\n'
                         '    gboolean ${field_variable_name}_set;\n')
                     cfile.write(string.Template(template).substitute(translations))
-                    cfile.write(variable_declaration)
+                    field.emit_variable_declaration(cfile)
 
         cfile.write(
             '};\n')
@@ -172,7 +190,7 @@ class Container:
     def __emit_core(self, hfile, cfile, translations):
         # Emit container core header
         template = '\n'
-        if self.static == False:
+        if not self.static and self.service != 'CTL':
             template += (
                 '\n'
                 '/**\n'
@@ -188,7 +206,7 @@ class Container:
         template += (
             '${static}${camelcase} *${underscore}_ref (${camelcase} *self);\n'
             '\n')
-        if self.static == False:
+        if not self.static and self.service != 'CTL':
             template += (
                 '/**\n'
                 ' * ${underscore}_unref:\n'
@@ -202,8 +220,8 @@ class Container:
         template += (
             '${static}void ${underscore}_unref (${camelcase} *self);\n'
             'G_DEFINE_AUTOPTR_CLEANUP_FUNC (${camelcase}, ${underscore}_unref)\n')
-        if self.readonly == False:
-            if self.static == False:
+        if not self.readonly:
+            if not self.static:
                 template += (
                     '\n'
                     '/**\n'
@@ -229,18 +247,18 @@ class Container:
             '${static}GType\n'
             '${underscore}_get_type (void)\n'
             '{\n'
-            '    static volatile gsize g_define_type_id__volatile = 0;\n'
+            '    static gsize g_define_type_id_initialized = 0;\n'
             '\n'
-            '    if (g_once_init_enter (&g_define_type_id__volatile)) {\n'
+            '    if (g_once_init_enter (&g_define_type_id_initialized)) {\n'
             '        GType g_define_type_id =\n'
             '            g_boxed_type_register_static (g_intern_static_string ("${camelcase}"),\n'
             '                                          (GBoxedCopyFunc) ${underscore}_ref,\n'
             '                                          (GBoxedFreeFunc) ${underscore}_unref);\n'
             '\n'
-            '        g_once_init_leave (&g_define_type_id__volatile, g_define_type_id);\n'
+            '        g_once_init_leave (&g_define_type_id_initialized, g_define_type_id);\n'
             '    }\n'
             '\n'
-            '    return g_define_type_id__volatile;\n'
+            '    return g_define_type_id_initialized;\n'
             '}\n'
             '\n'
             '${static}${camelcase} *\n'
@@ -259,19 +277,51 @@ class Container:
             '\n'
             '    if (g_atomic_int_dec_and_test (&self->ref_count)) {\n')
 
+        if self.compat:
+            template += (
+                '        if (self->compat_context && self->compat_context_free)\n'
+                '            self->compat_context_free (self->compat_context);\n')
+
         if self.fields is not None:
             for field in self.fields:
-                if field.variable is not None and field.variable.needs_dispose is True:
+                if field.variable is not None and field.variable.needs_dispose:
                     template += field.variable.build_dispose('        ', 'self->' + field.variable_name)
+                    if field.variable.needs_compat_gir and self.service != 'CTL':
+                        template += field.variable.build_dispose_gir('        ', 'self->' + field.variable_name)
 
         template += (
             '        g_slice_free (${camelcase}, self);\n'
             '    }\n'
             '}\n')
+
+        if self.compat:
+            template += (
+                'gpointer\n'
+                '${underscore}_get_compat_context (${camelcase} *self)\n'
+                '{\n'
+                '    g_return_val_if_fail (self != NULL, NULL);\n'
+                '\n'
+                '    return self->compat_context;\n'
+                '}\n'
+                '\n'
+                'void\n'
+                '${underscore}_set_compat_context (\n'
+                '    ${camelcase} *self,\n'
+                '    gpointer compat_context,\n'
+                '    GDestroyNotify compat_context_free)\n'
+                '{\n'
+                '    g_return_if_fail (self != NULL);\n'
+                '\n'
+                '    if (self->compat_context && self->compat_context_free)\n'
+                '        self->compat_context_free (self->compat_context);\n'
+                '\n'
+                '    self->compat_context = compat_context;\n'
+                '    self->compat_context_free = compat_context_free;\n'
+                '}\n')
         cfile.write(string.Template(template).substitute(translations))
 
         # _new() is only generated if the container is not readonly
-        if self.readonly == True:
+        if self.readonly:
             return
 
         template = (
@@ -321,7 +371,7 @@ class Container:
         if self.fields is not None:
             for field in self.fields:
                 field.emit_getter(auxfile, cfile)
-                if self.readonly == False:
+                if not self.readonly:
                     field.emit_setter(auxfile, cfile)
 
         # Emit the container core
@@ -346,6 +396,13 @@ class Container:
             '${type_macro}\n')
         sections['standard'] += string.Template(template).substitute(translations)
 
+        # Private
+        if self.compat:
+            template = (
+                '${underscore}_get_compat_context\n'
+                '${underscore}_set_compat_context\n')
+            sections['private'] += string.Template(template).substitute(translations)
+
         # Public types
         template = (
             '${camelcase}\n')
@@ -353,7 +410,7 @@ class Container:
 
         # Public methods
         template = '<SUBSECTION ${camelcase}Methods>\n'
-        if self.readonly == False:
+        if not self.readonly:
             template += (
                 '${underscore}_new\n')
         template += (

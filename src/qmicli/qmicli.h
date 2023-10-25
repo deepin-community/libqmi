@@ -29,6 +29,18 @@ void          qmicli_async_operation_done (gboolean reported_operation_status,
                                            gboolean skip_cid_release);
 void          qmicli_expect_indications   (void);
 
+/* qmi_wwan specific */
+GOptionGroup *qmicli_qmiwwan_get_option_group (void);
+gboolean      qmicli_qmiwwan_options_enabled  (void);
+void          qmicli_qmiwwan_run              (QmiDevice    *device,
+                                               GCancellable *cancellable);
+
+/* link management */
+GOptionGroup *qmicli_link_management_get_option_group (void);
+gboolean      qmicli_link_management_options_enabled  (void);
+void          qmicli_link_management_run              (QmiDevice    *device,
+                                                       GCancellable *cancellable);
+
 #if defined HAVE_QMI_SERVICE_DMS
 GOptionGroup *qmicli_dms_get_option_group (void);
 gboolean      qmicli_dms_options_enabled  (void);
@@ -138,6 +150,62 @@ GOptionGroup *qmicli_dsd_get_option_group (void);
 gboolean      qmicli_dsd_options_enabled  (void);
 void          qmicli_dsd_run              (QmiDevice *device,
                                            QmiClientDsd *client,
+                                           GCancellable *cancellable);
+#endif
+
+#if defined HAVE_QMI_SERVICE_SAR
+GOptionGroup *qmicli_sar_get_option_group (void);
+gboolean      qmicli_sar_options_enabled  (void);
+void          qmicli_sar_run              (QmiDevice *device,
+                                           QmiClientSar *client,
+                                           GCancellable *cancellable);
+#endif
+
+#if defined HAVE_QMI_SERVICE_DPM
+GOptionGroup *qmicli_dpm_get_option_group (void);
+gboolean      qmicli_dpm_options_enabled  (void);
+void          qmicli_dpm_run              (QmiDevice *device,
+                                           QmiClientDpm *client,
+                                           GCancellable *cancellable);
+#endif
+
+#if defined HAVE_QMI_SERVICE_FOX
+GOptionGroup *qmicli_fox_get_option_group (void);
+gboolean      qmicli_fox_options_enabled  (void);
+void          qmicli_fox_run              (QmiDevice *device,
+                                           QmiClientFox *client,
+                                           GCancellable *cancellable);
+#endif
+
+#if defined HAVE_QMI_SERVICE_ATR
+GOptionGroup *qmicli_atr_get_option_group (void);
+gboolean      qmicli_atr_options_enabled  (void);
+void          qmicli_atr_run              (QmiDevice *device,
+                                           QmiClientAtr *client,
+                                           GCancellable *cancellable);
+#endif
+
+#if defined HAVE_QMI_SERVICE_IMSP
+GOptionGroup *qmicli_imsp_get_option_group (void);
+gboolean      qmicli_imsp_options_enabled  (void);
+void          qmicli_imsp_run              (QmiDevice *device,
+                                            QmiClientImsp *client,
+                                            GCancellable *cancellable);
+#endif
+
+#if defined HAVE_QMI_SERVICE_IMSA
+GOptionGroup *qmicli_imsa_get_option_group (void);
+gboolean      qmicli_imsa_options_enabled  (void);
+void          qmicli_imsa_run              (QmiDevice *device,
+                                            QmiClientImsa *client,
+                                            GCancellable *cancellable);
+#endif
+
+#if defined HAVE_QMI_SERVICE_IMS
+GOptionGroup *qmicli_ims_get_option_group (void);
+gboolean      qmicli_ims_options_enabled  (void);
+void          qmicli_ims_run              (QmiDevice *device,
+                                           QmiClientIms *client,
                                            GCancellable *cancellable);
 #endif
 

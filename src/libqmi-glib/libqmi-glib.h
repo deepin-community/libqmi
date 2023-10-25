@@ -47,6 +47,7 @@
 #include "qmi-enums-nas.h"
 #include "qmi-nas.h"
 
+#include "qmi-flags64-wds.h"
 #include "qmi-enums-wds.h"
 #include "qmi-wds.h"
 
@@ -90,9 +91,31 @@
 #include "qmi-flags64-dsd.h"
 #include "qmi-dsd.h"
 
+#include "qmi-enums-sar.h"
+#include "qmi-sar.h"
+
+#include "qmi-dpm.h"
+
+#include "qmi-enums-fox.h"
+#include "qmi-fox.h"
+
+#include "qmi-atr.h"
+
+#include "qmi-enums-imsp.h"
+#include "qmi-imsp.h"
+
+#include "qmi-enums-imsa.h"
+#include "qmi-imsa.h"
+
+#include "qmi-ims.h"
+
+#include "qmi-enums-ssc.h"
+#include "qmi-ssc.h"
+
 /* generated */
 #include "qmi-error-types.h"
 #include "qmi-enum-types.h"
+#include "qmi-flag-types.h"
 #include "qmi-flags64-types.h"
 
 #if QMI_QRTR_SUPPORTED

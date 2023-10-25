@@ -36,6 +36,7 @@
 #include "qmi-ctl.h"
 #include "qmi-errors.h"
 #include "qmi-error-types.h"
+#include "qmi-helpers.h"
 
 G_DEFINE_TYPE (QmiEndpointQmux, qmi_endpoint_qmux, QMI_TYPE_ENDPOINT)
 
@@ -343,6 +344,64 @@ create_iostream_with_socket (GTask *task)
 }
 
 static void
+create_iostream_with_socket_direct (GTask *task)
+{
+    QmiEndpointQmux *self;
+    QmiFile *file;
+    GSocketAddress *socket_address;
+    GError *error = NULL;
+
+    self = g_task_get_source_object (task);
+
+    /* Create socket client */
+    self->priv->socket_client = g_socket_client_new ();
+    g_socket_client_set_family (self->priv->socket_client, G_SOCKET_FAMILY_UNIX);
+    g_socket_client_set_socket_type (self->priv->socket_client, G_SOCKET_TYPE_STREAM);
+    g_socket_client_set_protocol (self->priv->socket_client, G_SOCKET_PROTOCOL_DEFAULT);
+
+    /* Setup socket address (using a system path) */
+    g_object_get (self, QMI_ENDPOINT_FILE, &file, NULL);
+    socket_address = g_unix_socket_address_new_with_type (
+                         qmi_file_get_path (file),
+                         -1,
+                         G_UNIX_SOCKET_ADDRESS_PATH);
+
+    /* Connect to address */
+    self->priv->socket_connection = g_socket_client_connect (
+                                        self->priv->socket_client,
+                                        G_SOCKET_CONNECTABLE (socket_address),
+                                        NULL,
+                                        &error);
+    g_object_unref (socket_address);
+
+    /* Display an error if the socket is not reachable */
+    if (!self->priv->socket_connection) {
+        g_task_return_new_error (task,
+                            QMI_CORE_ERROR,
+                            QMI_CORE_ERROR_FAILED,
+                            "Cannot connect to the socket '%s': '%s'",
+                            qmi_file_get_path (file),
+                            error->message);
+        g_object_unref (file);
+        g_object_unref (task);
+        return;
+    }
+
+    g_object_unref (file);
+
+    /* Use the input and output streams of the socket */
+    self->priv->istream = g_io_stream_get_input_stream (G_IO_STREAM (self->priv->socket_connection));
+    if (self->priv->istream)
+        g_object_ref (self->priv->istream);
+
+    self->priv->ostream = g_io_stream_get_output_stream (G_IO_STREAM (self->priv->socket_connection));
+    if (self->priv->ostream)
+        g_object_ref (self->priv->ostream);
+
+    setup_iostream (task);
+}
+
+static void
 endpoint_open (QmiEndpoint         *endpoint,
                gboolean             use_proxy,
                guint                timeout,
@@ -352,6 +411,7 @@ endpoint_open (QmiEndpoint         *endpoint,
 {
     QmiEndpointQmux *self;
     QmuxDeviceOpenContext *ctx;
+    QmiFile *file;
     GTask *task;
 
     ctx = g_slice_new (QmuxDeviceOpenContext);
@@ -373,10 +433,17 @@ endpoint_open (QmiEndpoint         *endpoint,
         return;
     }
 
+    /* Get the file name to determine whether a unix domain socket should be used instead of a device file */
+    g_object_get (self, QMI_ENDPOINT_FILE, &file, NULL);
+
     if (use_proxy)
         create_iostream_with_socket (task);
+    else if (g_strrstr (qmi_file_get_path (file), QMI_QMUX_SOCKET_FILE_NAME))
+        create_iostream_with_socket_direct (task);
     else
         create_iostream_with_fd (task);
+
+    g_object_unref (file);
 }
 
 /*****************************************************************************/
@@ -395,9 +462,25 @@ endpoint_send (QmiEndpoint   *self,
                GCancellable  *cancellable,
                GError       **error)
 {
-    gconstpointer raw_message;
-    gsize raw_message_len;
-    GError *inner_error = NULL;
+    gconstpointer  raw_message;
+    gsize          raw_message_len;
+    GError        *inner_error = NULL;
+
+    /* QMUX endpoint allows only QMUX messages */
+    if (qmi_message_get_marker (message) != QMI_MESSAGE_QMUX_MARKER) {
+        g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
+                     "QMUX endpoint expects only QMUX messages");
+        return FALSE;
+    }
+
+    /* Disallow private CTL operations */
+    if ((qmi_message_get_service (message) == QMI_SERVICE_CTL) &&
+        (qmi_message_get_message_id (message) == QMI_MESSAGE_CTL_INTERNAL_ALLOCATE_CID_QRTR ||
+         qmi_message_get_message_id (message) == QMI_MESSAGE_CTL_INTERNAL_RELEASE_CID_QRTR)) {
+        g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
+                     "QMUX endpoint expects only 8bit QMI services");
+        return FALSE;
+    }
 
     /* Get raw message */
     raw_message = qmi_message_get_raw (message, &raw_message_len, &inner_error);
@@ -470,8 +553,8 @@ endpoint_close (QmiEndpoint         *endpoint,
 /*****************************************************************************/
 
 QmiEndpointQmux *
-qmi_endpoint_qmux_new (QmiFile *file,
-                       gchar *proxy_path,
+qmi_endpoint_qmux_new (QmiFile      *file,
+                       const gchar  *proxy_path,
                        QmiClientCtl *client_ctl)
 {
     QmiEndpointQmux *self;
@@ -482,7 +565,7 @@ qmi_endpoint_qmux_new (QmiFile *file,
     self = g_object_new (QMI_TYPE_ENDPOINT_QMUX,
                          QMI_ENDPOINT_FILE, file,
                          NULL);
-    self->priv->proxy_path = proxy_path;
+    self->priv->proxy_path = g_strdup (proxy_path);
     self->priv->client_ctl = g_object_ref (client_ctl);
     return self;
 }
@@ -505,6 +588,7 @@ dispose (GObject *object)
 
     destroy_iostream (self);
     g_clear_object (&self->priv->client_ctl);
+    g_clear_pointer (&self->priv->proxy_path, g_free);
 
     G_OBJECT_CLASS (qmi_endpoint_qmux_parent_class)->dispose (object);
 }

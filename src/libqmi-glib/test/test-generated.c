@@ -468,6 +468,7 @@ nas_network_scan_ready (QmiClientNas *client,
     GError *error = NULL;
     gboolean st;
     GArray *network_information = NULL;
+    GPtrArray *network_information_ptr = NULL;
     GArray *radio_access_technology = NULL;
     GArray *mnc_pcs_digit_include_status = NULL;
     guint i;
@@ -492,6 +493,26 @@ nas_network_scan_ready (QmiClientNas *client,
         QmiMessageNasNetworkScanOutputNetworkInformationElement *el;
 
         el = &g_array_index (network_information, QmiMessageNasNetworkScanOutputNetworkInformationElement, i);
+
+        g_assert_cmpuint (el->mcc, ==, scan_results[i].mcc);
+        g_assert_cmpuint (el->mnc, ==, scan_results[i].mnc);
+        g_assert_cmpuint (el->network_status, ==, scan_results[i].network_status);
+        g_assert_cmpstr  (el->description, ==, scan_results[i].description);
+    }
+
+    /* GIR compat method with GPtrArray */
+    st = (qmi_message_nas_network_scan_output_get_network_information_gir (
+              output,
+              &network_information_ptr,
+              &error));
+    g_assert_no_error (error);
+    g_assert (st);
+    g_assert (network_information_ptr);
+    g_assert_cmpuint (network_information_ptr->len, ==, 8);
+    for (i = 0; i < network_information_ptr->len; i++) {
+        QmiMessageNasNetworkScanOutputNetworkInformationElement *el;
+
+        el = g_ptr_array_index (network_information_ptr, i);
 
         g_assert_cmpuint (el->mcc, ==, scan_results[i].mcc);
         g_assert_cmpuint (el->mnc, ==, scan_results[i].mnc);
@@ -699,6 +720,20 @@ nas_get_cell_location_info_2_ready (QmiClientNas *client,
         guint8    value_intrafrequency_lte_info_s_intra_search_threshold = 0;
         GArray   *value_intrafrequency_lte_info_cell = NULL;
 
+        gboolean  value_intrafrequency_lte_info_ue_in_idle_gir = FALSE;
+        GArray   *value_intrafrequency_lte_info_plmn_gir = NULL;
+        guint16   value_intrafrequency_lte_info_tracking_area_code_gir = 0;
+        guint32   value_intrafrequency_lte_info_global_cell_id_gir = 0;
+        guint16   value_intrafrequency_lte_info_eutra_absolute_rf_channel_number_gir = 0;
+        guint16   value_intrafrequency_lte_info_serving_cell_id_gir = 0;
+        guint8    value_intrafrequency_lte_info_cell_reselection_priority_gir = 0;
+        guint8    value_intrafrequency_lte_info_s_non_intra_search_threshold_gir = 0;
+        guint8    value_intrafrequency_lte_info_serving_cell_low_threshold_gir = 0;
+        guint8    value_intrafrequency_lte_info_s_intra_search_threshold_gir = 0;
+        GPtrArray   *value_intrafrequency_lte_info_cell_gir = NULL;
+
+        guint i;
+
         st = qmi_message_nas_get_cell_location_info_output_get_intrafrequency_lte_info_v2 (output,
                                                                                            &value_intrafrequency_lte_info_ue_in_idle,
                                                                                            &value_intrafrequency_lte_info_plmn,
@@ -714,6 +749,48 @@ nas_get_cell_location_info_2_ready (QmiClientNas *client,
                                                                                            &error);
         g_assert_no_error (error);
         g_assert (st);
+
+        st = qmi_message_nas_get_cell_location_info_output_get_intrafrequency_lte_info_v2_gir (output,
+                                                                                               &value_intrafrequency_lte_info_ue_in_idle_gir,
+                                                                                               &value_intrafrequency_lte_info_plmn_gir,
+                                                                                               &value_intrafrequency_lte_info_tracking_area_code_gir,
+                                                                                               &value_intrafrequency_lte_info_global_cell_id_gir,
+                                                                                               &value_intrafrequency_lte_info_eutra_absolute_rf_channel_number_gir,
+                                                                                               &value_intrafrequency_lte_info_serving_cell_id_gir,
+                                                                                               &value_intrafrequency_lte_info_cell_reselection_priority_gir,
+                                                                                               &value_intrafrequency_lte_info_s_non_intra_search_threshold_gir,
+                                                                                               &value_intrafrequency_lte_info_serving_cell_low_threshold_gir,
+                                                                                               &value_intrafrequency_lte_info_s_intra_search_threshold_gir,
+                                                                                               &value_intrafrequency_lte_info_cell_gir,
+                                                                                               &error);
+        g_assert_no_error (error);
+        g_assert (st);
+
+        g_assert_cmpuint (value_intrafrequency_lte_info_ue_in_idle, ==, value_intrafrequency_lte_info_ue_in_idle_gir);
+        g_assert_cmpuint (value_intrafrequency_lte_info_plmn->len, ==, value_intrafrequency_lte_info_plmn_gir->len);
+        for (i = 0; i < value_intrafrequency_lte_info_plmn->len; i++)
+            g_assert_cmpuint (g_array_index (value_intrafrequency_lte_info_plmn, guint8, i), ==, g_array_index (value_intrafrequency_lte_info_plmn_gir, guint8, i));
+        g_assert_cmpuint (value_intrafrequency_lte_info_tracking_area_code, ==, value_intrafrequency_lte_info_tracking_area_code_gir);
+        g_assert_cmpuint (value_intrafrequency_lte_info_global_cell_id, == , value_intrafrequency_lte_info_global_cell_id_gir);
+        g_assert_cmpuint (value_intrafrequency_lte_info_eutra_absolute_rf_channel_number, == , value_intrafrequency_lte_info_eutra_absolute_rf_channel_number_gir);
+        g_assert_cmpuint (value_intrafrequency_lte_info_serving_cell_id, == , value_intrafrequency_lte_info_serving_cell_id_gir);
+        g_assert_cmpuint (value_intrafrequency_lte_info_cell_reselection_priority, == , value_intrafrequency_lte_info_cell_reselection_priority_gir);
+        g_assert_cmpuint (value_intrafrequency_lte_info_s_non_intra_search_threshold, == , value_intrafrequency_lte_info_s_non_intra_search_threshold_gir);
+        g_assert_cmpuint (value_intrafrequency_lte_info_serving_cell_low_threshold, == , value_intrafrequency_lte_info_serving_cell_low_threshold_gir);
+        g_assert_cmpuint (value_intrafrequency_lte_info_s_intra_search_threshold, == , value_intrafrequency_lte_info_s_intra_search_threshold_gir);
+        g_assert_cmpuint (value_intrafrequency_lte_info_cell->len, ==, value_intrafrequency_lte_info_cell_gir->len);
+        for (i = 0; i < value_intrafrequency_lte_info_cell->len; i++) {
+            QmiMessageNasGetCellLocationInfoOutputIntrafrequencyLteInfoV2CellElement *cell;
+            QmiMessageNasGetCellLocationInfoOutputIntrafrequencyLteInfoV2CellElement *cell_gir;
+
+            cell = &g_array_index (value_intrafrequency_lte_info_cell, QmiMessageNasGetCellLocationInfoOutputIntrafrequencyLteInfoV2CellElement, i);
+            cell_gir = g_ptr_array_index (value_intrafrequency_lte_info_cell_gir, i);
+            g_assert_cmpuint (cell->physical_cell_id, ==, cell_gir->physical_cell_id);
+            g_assert_cmpuint (cell->rsrq, ==, cell_gir->rsrq);
+            g_assert_cmpuint (cell->rsrp, ==, cell_gir->rsrp);
+            g_assert_cmpuint (cell->rssi, ==, cell_gir->rssi);
+            g_assert_cmpuint (cell->cell_selection_rx_level, ==, cell_gir->cell_selection_rx_level);
+        }
     }
 
     qmi_message_nas_get_cell_location_info_output_unref (output);
@@ -777,7 +854,7 @@ nas_get_cell_location_info_invalid_ready (QmiClientNas *client,
                                           TestFixture  *fixture)
 {
     QmiMessageNasGetCellLocationInfoOutput *output;
-    GError *error = NULL;
+    g_autoptr(GError) error = NULL;
 
     output = qmi_client_nas_get_cell_location_info_finish (client, res, &error);
     g_assert_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_UNEXPECTED_MESSAGE);
@@ -816,6 +893,169 @@ test_generated_nas_get_cell_location_info_invalid (TestFixture *fixture)
 
     qmi_client_nas_get_cell_location_info (QMI_CLIENT_NAS (fixture->service_info[QMI_SERVICE_NAS].client), NULL, 3, NULL,
                                            (GAsyncReadyCallback) nas_get_cell_location_info_invalid_ready,
+                                           fixture);
+
+    test_fixture_loop_run (fixture);
+}
+
+static void
+test_compat_nas_get_cell_location_info_geran_info_ready (QmiClientNas *client,
+                                                         GAsyncResult *res,
+                                                         TestFixture  *fixture)
+{
+    QmiMessageNasGetCellLocationInfoOutput *output;
+    GError *error = NULL;
+    gboolean st;
+
+    output = qmi_client_nas_get_cell_location_info_finish (client, res, &error);
+    g_assert_no_error (error);
+    g_assert (output);
+
+    st = qmi_message_nas_get_cell_location_info_output_get_result (output, &error);
+    g_assert_no_error (error);
+    g_assert (st);
+
+    {
+        guint32 geran_info_v2_cell_id = 0;
+        GArray *geran_info_v2_plmn = NULL;
+        guint16 geran_info_v2_lac = 0;
+        guint16 geran_info_v2_geran_absolute_rf_channel_number = 0;
+        guint8 geran_info_v2_base_station_identity_code = 0;
+        guint32 geran_info_v2_timing_advance = 0;
+        guint16 geran_info_v2_rx_level = 0;
+        GArray *geran_info_v2_cell = NULL;
+
+        st = qmi_message_nas_get_cell_location_info_output_get_geran_info_v2 (output,
+                                                                              &geran_info_v2_cell_id,
+                                                                              &geran_info_v2_plmn,
+                                                                              &geran_info_v2_lac,
+                                                                              &geran_info_v2_geran_absolute_rf_channel_number,
+                                                                              &geran_info_v2_base_station_identity_code,
+                                                                              &geran_info_v2_timing_advance,
+                                                                              &geran_info_v2_rx_level,
+                                                                              &geran_info_v2_cell,
+                                                                              &error);
+        g_assert_no_error (error);
+        g_assert (st);
+
+#ifndef QMI_DISABLE_DEPRECATED
+        {
+            guint i;
+            guint32 geran_info_cell_id = 0;
+            const gchar *geran_info_plmn = NULL;
+            guint16 geran_info_lac = 0;
+            guint16 geran_info_geran_absolute_rf_channel_number = 0;
+            guint8 geran_info_base_station_identity_code = 0;
+            guint32 geran_info_timing_advance = 0;
+            guint16 geran_info_rx_level = 0;
+            GArray *geran_info_cell = NULL;
+
+            st = qmi_message_nas_get_cell_location_info_output_get_geran_info (output,
+                                                                               &geran_info_cell_id,
+                                                                               &geran_info_plmn,
+                                                                               &geran_info_lac,
+                                                                               &geran_info_geran_absolute_rf_channel_number,
+                                                                               &geran_info_base_station_identity_code,
+                                                                               &geran_info_timing_advance,
+                                                                               &geran_info_rx_level,
+                                                                               &geran_info_cell,
+                                                                               &error);
+            g_assert_no_error (error);
+            g_assert (st);
+
+            g_assert_cmpuint (geran_info_v2_cell_id, ==, geran_info_cell_id);
+            /* plmn won't be equal, as it's broken in v1 */
+            g_assert_cmpuint (geran_info_v2_lac, ==, geran_info_lac);
+            g_assert_cmpuint (geran_info_v2_geran_absolute_rf_channel_number, ==, geran_info_geran_absolute_rf_channel_number);
+            g_assert_cmpuint (geran_info_v2_base_station_identity_code, ==, geran_info_base_station_identity_code);
+            g_assert_cmpuint (geran_info_v2_timing_advance, ==, geran_info_timing_advance);
+            g_assert_cmpuint (geran_info_v2_rx_level, ==, geran_info_rx_level);
+
+            g_assert (geran_info_cell);
+            g_assert_cmpuint (geran_info_cell->len, ==, geran_info_v2_cell->len);
+            for (i = 0; i < geran_info_v2_cell->len; i++) {
+                QmiMessageNasGetCellLocationInfoOutputGeranInfoV2CellElement *elemv2;
+                QmiMessageNasGetCellLocationInfoOutputGeranInfoCellElement *elem;
+
+                elemv2 = &g_array_index (geran_info_v2_cell, QmiMessageNasGetCellLocationInfoOutputGeranInfoV2CellElement, i);
+                elem = &g_array_index (geran_info_cell, QmiMessageNasGetCellLocationInfoOutputGeranInfoCellElement, i);
+                g_assert_cmpuint (elem->cell_id, ==, elemv2->cell_id);
+                /* plmn won't be equal, as it's broken in v1 */
+                g_assert_cmpuint (elem->lac, ==, elemv2->lac);
+                g_assert_cmpuint (elem->geran_absolute_rf_channel_number, ==, elemv2->geran_absolute_rf_channel_number);
+                g_assert_cmpuint (elem->base_station_identity_code, ==, elemv2->base_station_identity_code);
+                g_assert_cmpuint (elem->rx_level, ==, elemv2->rx_level);
+            }
+        }
+#endif /* QMI_DISABLE_DEPRECATED */
+    }
+
+    qmi_message_nas_get_cell_location_info_output_unref (output);
+
+    test_fixture_loop_stop (fixture);
+}
+
+static void
+test_compat_nas_get_cell_location_info_geran_info (TestFixture *fixture)
+{
+    guint8 request[] = {
+        0x01, 0x0C, 0x00, 0x00, 0x03, 0x01, 0x00, 0x01,
+        0x00, 0x43, 0x00, 0x00, 0x00
+    };
+    guint8 response[] = {
+        0x01, 0x58, 0x01, 0x80, 0x03, 0x01, 0x02, 0x01,
+        0x00, 0x43, 0x00, 0x4C, 0x01, 0x02, 0x04, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x10, 0x67, 0x00, 0x02,
+        0x09, 0x00, 0x00, 0x12, 0xF4, 0x30, 0x76, 0x04,
+        0xDD, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x32,
+        0x00, 0x06, 0x8E, 0x08, 0x00, 0x00, 0x12, 0xF4,
+        0x30, 0x76, 0x04, 0xD0, 0x03, 0x28, 0x28, 0x00,
+        0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0xD6, 0x03, 0x0B, 0x1C, 0x00, 0xFF, 0xFF,
+        0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD5,
+        0x03, 0x24, 0x1A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0xD7, 0x03, 0x01,
+        0x18, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0xDF, 0x03, 0x22, 0x17, 0x00,
+        0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0xDA, 0x03, 0x08, 0x10, 0x00, 0x1B, 0x04,
+        0x00, 0xFF, 0xFF, 0xDD, 0x03, 0x21, 0xC7, 0x00,
+        0x02, 0x09, 0x00, 0x00, 0x12, 0xF4, 0x30, 0x76,
+        0x04, 0xDD, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x32, 0x00, 0x06, 0x8E, 0x08, 0x00, 0x00, 0x12,
+        0xF4, 0x30, 0x76, 0x04, 0xD0, 0x03, 0x28, 0x28,
+        0x00, 0x24, 0x00, 0x00, 0x00, 0x24, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0xD6, 0x03, 0x0B, 0x1C, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF,
+        0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0xD5, 0x03, 0x24, 0x1A, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF,
+        0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD7, 0x03,
+        0x01, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0xDF, 0x03, 0x22, 0x17,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0xDA, 0x03, 0x08, 0x10, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x24,
+        0x03, 0x00, 0x00, 0xFF, 0xFF, 0x25, 0x01, 0x00,
+        0x00
+    };
+
+    test_port_context_set_command (fixture->ctx,
+                                   request, G_N_ELEMENTS (request),
+                                   response, G_N_ELEMENTS (response),
+                                   fixture->service_info[QMI_SERVICE_NAS].transaction_id++);
+
+    qmi_client_nas_get_cell_location_info (QMI_CLIENT_NAS (fixture->service_info[QMI_SERVICE_NAS].client), NULL, 3, NULL,
+                                           (GAsyncReadyCallback) test_compat_nas_get_cell_location_info_geran_info_ready,
                                            fixture);
 
     test_fixture_loop_run (fixture);
@@ -947,7 +1187,7 @@ nas_get_system_info_ready (QmiClientNas *client,
         guint32                     cid;
         gboolean                    registration_reject_info_valid = FALSE;
         QmiNasNetworkServiceDomain  registration_reject_domain;
-        guint8                      registration_reject_cause;
+        QmiNasRejectCause           registration_reject_cause;
         gboolean                    network_id_valid = FALSE;
         const gchar                *mcc = NULL;
         const gchar                *mnc = NULL;
@@ -976,28 +1216,29 @@ nas_get_system_info_ready (QmiClientNas *client,
          *		Registration domain: 'not-applicable'
          */
 
-        g_assert (qmi_message_nas_get_system_info_output_get_lte_system_info (output,
-                                                                              &domain_valid,
-                                                                              &domain,
-                                                                              &service_capability_valid,
-                                                                              &service_capability,
-                                                                              &roaming_status_valid,
-                                                                              &roaming_status,
-                                                                              &forbidden_valid,
-                                                                              &forbidden,
-                                                                              &lac_valid,
-                                                                              &lac,
-                                                                              &cid_valid,
-                                                                              &cid,
-                                                                              &registration_reject_info_valid,
-                                                                              &registration_reject_domain,
-                                                                              &registration_reject_cause,
-                                                                              &network_id_valid,
-                                                                              &mcc,
-                                                                              &mnc,
-                                                                              &tac_valid,
-                                                                              &tac,
-                                                                              &error));
+        g_assert (qmi_message_nas_get_system_info_output_get_lte_system_info_v2 (
+                      output,
+                      &domain_valid,
+                      &domain,
+                      &service_capability_valid,
+                      &service_capability,
+                      &roaming_status_valid,
+                      &roaming_status,
+                      &forbidden_valid,
+                      &forbidden,
+                      &lac_valid,
+                      &lac,
+                      &cid_valid,
+                      &cid,
+                      &registration_reject_info_valid,
+                      &registration_reject_domain,
+                      &registration_reject_cause,
+                      &network_id_valid,
+                      &mcc,
+                      &mnc,
+                      &tac_valid,
+                      &tac,
+                      &error));
         g_assert_no_error (error);
         g_assert (domain_valid);
         g_assert_cmpuint (domain, ==, QMI_NAS_NETWORK_SERVICE_DOMAIN_CS_PS);
@@ -1098,6 +1339,7 @@ int main (int argc, char **argv)
     TEST_ADD ("/libqmi-glib/generated/nas/get-cell-location-info/1",       test_generated_nas_get_cell_location_info_1);
     TEST_ADD ("/libqmi-glib/generated/nas/get-cell-location-info/2",       test_generated_nas_get_cell_location_info_2);
     TEST_ADD ("/libqmi-glib/generated/nas/get-cell-location-info/invalid", test_generated_nas_get_cell_location_info_invalid);
+    TEST_ADD ("/libqmi-glib/compat/nas/get-cell-location-info/geran-info", test_compat_nas_get_cell_location_info_geran_info);
 #endif
 #if defined HAVE_QMI_MESSAGE_NAS_GET_SERVING_SYSTEM
     TEST_ADD ("/libqmi-glib/generated/nas/get-serving-system", test_generated_nas_get_serving_system);

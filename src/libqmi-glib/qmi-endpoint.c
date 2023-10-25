@@ -24,7 +24,7 @@
 
 #include "qmi-endpoint.h"
 
-#include "qmi-utils-private.h"
+#include "qmi-helpers.h"
 #include "qmi-error-types.h"
 #include "qmi-errors.h"
 
@@ -62,12 +62,13 @@ qmi_endpoint_parse_buffer (QmiEndpoint        *self,
         GError *inner_error = NULL;
         QmiMessage *message;
 
-        /* Every message received must start with the QMUX marker.
+        /* Every message received must start with the QMUX or QRTR marker.
          * If it doesn't, we broke framing :-/
          * If we broke framing, an error should be reported and the device
          * should get closed */
         if (self->priv->buffer->len > 0 &&
-            self->priv->buffer->data[0] != QMI_MESSAGE_QMUX_MARKER) {
+            self->priv->buffer->data[0] != QMI_MESSAGE_QMUX_MARKER &&
+            self->priv->buffer->data[0] != QMI_MESSAGE_QRTR_MARKER) {
             g_set_error (error,
                          QMI_PROTOCOL_ERROR,
                          QMI_PROTOCOL_ERROR_MALFORMED_MESSAGE,
@@ -83,7 +84,7 @@ qmi_endpoint_parse_buffer (QmiEndpoint        *self,
                 return TRUE;
 
             /* Warn about the issue */
-            g_warning ("[%s] Invalid QMI message received: '%s'",
+            g_warning ("[%s] invalid message received: '%s'",
                        qmi_file_get_path_display (self->priv->file),
                        inner_error->message);
             g_error_free (inner_error);
@@ -92,8 +93,7 @@ qmi_endpoint_parse_buffer (QmiEndpoint        *self,
                 gchar *printable;
                 guint len = MIN (self->priv->buffer->len, 2048);
 
-                printable = __qmi_utils_str_hex (self->priv->buffer->data,
-                                                 len, ':');
+                printable = qmi_helpers_str_hex (self->priv->buffer->data, len, ':');
                 g_debug ("<<<<<< RAW INVALID MESSAGE:\n"
                          "<<<<<<   length = %u\n"
                          "<<<<<<   data   = %s\n",
@@ -327,9 +327,6 @@ qmi_endpoint_class_init (QmiEndpointClass *klass)
     klass->setup_indications = endpoint_setup_indications;
     klass->setup_indications_finish = endpoint_setup_indications_finish;
 
-    /**
-     * QmiEndpoint:endpoint-file:
-     */
     properties[PROP_FILE] =
         g_param_spec_object (QMI_ENDPOINT_FILE,
                              "Device file",
@@ -338,13 +335,6 @@ qmi_endpoint_class_init (QmiEndpointClass *klass)
                              G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY);
     g_object_class_install_property (object_class, PROP_FILE, properties[PROP_FILE]);
 
-    /**
-     * QmiEndpoint::new-data:
-     * @object: A #QmiEndpoint.
-     * @output: none
-     *
-     * The ::new-data signal is emitted when the endpoint receives data.
-     */
     signals[SIGNAL_NEW_DATA] =
         g_signal_new (QMI_ENDPOINT_SIGNAL_NEW_DATA,
                       G_OBJECT_CLASS_TYPE (G_OBJECT_CLASS (klass)),
@@ -356,13 +346,6 @@ qmi_endpoint_class_init (QmiEndpointClass *klass)
                       G_TYPE_NONE,
                       0);
 
-    /**
-     * QmiEndpoint::hangup:
-     * @object: A #QmiEndpoint.
-     * @output: none
-     *
-     * The ::endpoint signal is emitted when an unexpected port hang-up is received.
-     */
     signals[SIGNAL_HANGUP] =
         g_signal_new (QMI_ENDPOINT_SIGNAL_HANGUP,
                       G_OBJECT_CLASS_TYPE (G_OBJECT_CLASS (klass)),

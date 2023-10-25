@@ -66,7 +66,7 @@ static GOptionEntry entries[] = {
       "Just allocate or release a GMS client. Use with `--client-no-release-cid' and/or `--client-cid'",
       NULL
     },
-    { NULL }
+    { NULL, 0, 0, 0, NULL, NULL, NULL }
 };
 
 GOptionGroup *
@@ -187,7 +187,6 @@ set_value_input_create (const gchar *str)
         parts = g_strsplit_set (str, ",", -1);
         if (g_strv_length (parts) != 2) {
             g_printerr ("error: failed to parse test value: '%s'\n", str);
-            g_strfreev (parts);
             goto out;
         }
         mand_value_str = parts[0];

@@ -90,8 +90,12 @@ test_message_parse_common (const guint8 *buffer,
 
         message = qmi_message_new_from_raw (array, &error);
         if (!message) {
-            if (error && (n_messages < n_expected_messages))
-                g_printerr ("error creating message from raw data: '%s'\n", error->message);
+            if (error) {
+                if (n_messages < n_expected_messages)
+                    g_printerr ("error creating message from raw data: '%s'\n", error->message);
+                else
+                    g_debug ("error creating message from raw data: '%s'", error->message);
+            }
             break;
         }
 
@@ -102,6 +106,22 @@ test_message_parse_common (const guint8 *buffer,
     } while (array->len > 0);
 
     g_assert_cmpuint (n_messages, ==, n_expected_messages);
+}
+
+static void
+test_message_parse_wrong_qmux (void)
+{
+    const guint8 buffer[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a };
+
+    test_message_parse_common (buffer, sizeof (buffer), 0);
+}
+
+static void
+test_message_parse_tiny (void)
+{
+    const guint8 buffer[] = { 0x01, 0x00, 0x02 };
+
+    test_message_parse_common (buffer, sizeof (buffer), 0);
 }
 
 static void
@@ -292,6 +312,24 @@ test_message_parse_string_with_trailing_tab (void)
     };
 
     test_message_printable_common (buffer, sizeof (buffer), QMI_MESSAGE_VENDOR_GENERIC, "EM12-AW");
+}
+
+#endif
+
+#if defined HAVE_QMI_MESSAGE_NAS_SWI_GET_STATUS
+
+static void
+test_message_parse_signed_int (void)
+{
+    /* Temperature given as a signed int */
+    const guint8 buffer[] = {
+        0x01, 0x27, 0x00, 0x80, 0x03, 0x05, 0x02, 0x01, 0x00, 0x56, 0x55, 0x1B,
+        0x00, 0x02, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x09, 0x00, 0x08,
+        0x01, 0xFC, 0x0D, 0xFF, 0xFF, 0x02, 0x00, 0x00, 0x01, 0x05, 0x00, 0xFB,
+        0x05, 0x09, 0x00, 0x00
+    };
+
+    test_message_printable_common (buffer, sizeof (buffer), 0x1199, "temperature = '-5'");
 }
 
 #endif
@@ -1579,10 +1617,81 @@ test_message_set_transaction_id_services (void)
 
 /*****************************************************************************/
 
+static void
+test_message_16bit_service_indication (void)
+{
+    g_autoptr(GByteArray) buffer = NULL;
+    g_autoptr(QmiMessage) message = NULL;
+    g_autoptr(GError)     error = NULL;
+
+    const guint8 ssc_message[] = {
+        0x02,       /* marker is the QRTR one because we have a 16bit service! */
+        0x21, 0x00, /* message length: 33 bytes*/
+        0x90, 0x01, /* service: SSC */
+        0x03,       /* client */
+        0x04,       /* service flags: Indication */
+        0x01, 0x00, /* transaction */
+        0x21, 0x00, /* message: Report Small */
+        0x15, 0x00, /* all tlvs length: 21 bytes */
+        /* TLV */
+        0x01,                   /* type: client id */
+        0x08, 0x00,             /* length: 8 bytes */
+        0x01, 0x00, 0x00, 0x00, /* 64bit uint value */
+        0x00, 0x00, 0x00, 0x00,
+        /* TLV */
+        0x02,                         /* type: data */
+        0x07, 0x00,                   /* length: 7 bytes */
+        0x05, 0x00,                   /* array size */
+        0x00, 0x01, 0x02, 0x03, 0x04, /* 5 bytes in data array */
+    };
+
+    test_message_printable_common (ssc_message, sizeof (ssc_message), QMI_MESSAGE_VENDOR_GENERIC, "");
+
+    /* DMS message */
+    buffer = g_byte_array_append (g_byte_array_sized_new (sizeof (ssc_message)), ssc_message, sizeof (ssc_message));
+    message = qmi_message_new_from_raw (buffer, &error);
+    g_assert_no_error (error);
+    g_assert (message);
+
+    g_assert (qmi_message_is_indication (message));
+    g_assert_cmpuint (qmi_message_get_service (message), ==, QMI_SERVICE_SSC);
+    g_assert_cmpuint (qmi_message_get_message_id (message), ==, 0x0021);
+
+#if defined HAVE_QMI_INDICATION_SSC_REPORT_SMALL
+    {
+        g_autoptr(QmiIndicationSscReportSmallOutput) output = NULL;
+        gboolean      tlv_exists;
+        GArray       *value_data;
+        guint64       client_id;
+        const guint8  expected_value_data[] = {
+            0x00, 0x01, 0x02, 0x03, 0x04
+        };
+
+        output = qmi_indication_ssc_report_small_indication_parse (message, &error);
+        g_assert_no_error (error);
+        g_assert (output);
+
+        tlv_exists = qmi_indication_ssc_report_small_output_get_client_id (output, &client_id, &error);
+        g_assert_no_error (error);
+        g_assert (tlv_exists);
+        g_assert_cmpuint (client_id, ==, (guint64)0x01);
+
+        tlv_exists = qmi_indication_ssc_report_small_output_get_data (output, &value_data, &error);
+        g_assert_no_error (error);
+        g_assert (tlv_exists);
+        _g_assert_cmpmem (value_data->data, value_data->len, expected_value_data, G_N_ELEMENTS (expected_value_data));
+    }
+#endif
+}
+
+/*****************************************************************************/
+
 int main (int argc, char **argv)
 {
     g_test_init (&argc, &argv, NULL);
 
+    g_test_add_func ("/libqmi-glib/message/parse/wrong-qmux",            test_message_parse_wrong_qmux);
+    g_test_add_func ("/libqmi-glib/message/parse/tiny",                  test_message_parse_tiny);
     g_test_add_func ("/libqmi-glib/message/parse/short",                 test_message_parse_short);
     g_test_add_func ("/libqmi-glib/message/parse/complete",              test_message_parse_complete);
     g_test_add_func ("/libqmi-glib/message/parse/complete-and-short",    test_message_parse_complete_and_short);
@@ -1599,6 +1708,9 @@ int main (int argc, char **argv)
 #endif
 #if defined HAVE_QMI_MESSAGE_DMS_GET_MODEL
     g_test_add_func ("/libqmi-glib/message/parse/string-with-trailing-tab", test_message_parse_string_with_trailing_tab);
+#endif
+#if defined HAVE_QMI_MESSAGE_NAS_SWI_GET_STATUS
+    g_test_add_func ("/libqmi-glib/message/parse/signed-int", test_message_parse_signed_int);
 #endif
 
     g_test_add_func ("/libqmi-glib/message/new/request",           test_message_new_request);
@@ -1621,6 +1733,8 @@ int main (int argc, char **argv)
 
     g_test_add_func ("/libqmi-glib/message/set-transaction-id/ctl",      test_message_set_transaction_id_ctl);
     g_test_add_func ("/libqmi-glib/message/set-transaction-id/services", test_message_set_transaction_id_services);
+
+    g_test_add_func ("/libqmi-glib/message/16bit-service/indication", test_message_16bit_service_indication);
 
     return g_test_run ();
 }

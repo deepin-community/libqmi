@@ -37,6 +37,9 @@
 
 #if defined HAVE_QMI_SERVICE_WDS
 
+#undef VALIDATE_MASK_NONE
+#define VALIDATE_MASK_NONE(str) (str ? str : "none")
+
 #define QMI_WDS_MUX_ID_UNDEFINED 0xFF
 #define QMI_WDS_ENDPOINT_INTERFACE_NUMBER_UNDEFINED -1
 
@@ -70,17 +73,24 @@ static gchar *swi_create_profile_indexed_str;
 static gchar *modify_profile_str;
 static gchar *delete_profile_str;
 static gchar *get_profile_list_str;
-static gchar *get_default_profile_num_str;
-static gchar *set_default_profile_num_str;
+static gchar *get_default_profile_num_str; /* deprecated */
+static gchar *get_default_profile_number_str;
+static gchar *set_default_profile_num_str; /* deprecated */
+static gchar *set_default_profile_number_str;
 static gchar *get_default_settings_str;
 static gboolean get_autoconnect_settings_flag;
 static gchar *set_autoconnect_settings_str;
 static gboolean get_supported_messages_flag;
 static gboolean reset_flag;
 static gboolean noop_flag;
+static gchar *bind_data_port_str;
 static gchar *bind_mux_str;
 static gchar *set_ip_family_str;
 static gboolean get_channel_rates_flag;
+static gboolean get_lte_attach_parameters_flag;
+static gboolean get_max_lte_attach_pdn_number_flag;
+static gboolean get_lte_attach_pdn_list_flag;
+static gchar *set_lte_attach_pdn_list_str;
 
 static GOptionEntry entries[] = {
 #if defined HAVE_QMI_MESSAGE_WDS_START_NETWORK
@@ -179,14 +189,14 @@ static GOptionEntry entries[] = {
       "[3gpp|3gpp2]"
     },
 #endif
-#if defined HAVE_QMI_MESSAGE_WDS_GET_DEFAULT_PROFILE_NUM
-    { "wds-get-default-profile-num", 0, 0, G_OPTION_ARG_STRING, &get_default_profile_num_str,
+#if defined HAVE_QMI_MESSAGE_WDS_GET_DEFAULT_PROFILE_NUMBER
+    { "wds-get-default-profile-number", 0, 0, G_OPTION_ARG_STRING, &get_default_profile_number_str,
       "Get default profile number",
       "[3gpp|3gpp2]"
     },
 #endif
-#if defined HAVE_QMI_MESSAGE_WDS_SET_DEFAULT_PROFILE_NUM
-    { "wds-set-default-profile-num", 0, 0, G_OPTION_ARG_STRING, &set_default_profile_num_str,
+#if defined HAVE_QMI_MESSAGE_WDS_SET_DEFAULT_PROFILE_NUMBER
+    { "wds-set-default-profile-number", 0, 0, G_OPTION_ARG_STRING, &set_default_profile_number_str,
       "Set default profile number",
       "[(3gpp|3gpp2),#]"
     },
@@ -221,9 +231,15 @@ static GOptionEntry entries[] = {
       NULL
     },
 #endif
+#if defined HAVE_QMI_MESSAGE_WDS_BIND_DATA_PORT
+    { "wds-bind-data-port", 0, 0, G_OPTION_ARG_STRING, &bind_data_port_str,
+      "Bind data port to controller device to be used with `--client-no-release-cid'",
+      "[a2-mux-rmnet0-7|#]"
+    },
+#endif
 #if defined HAVE_QMI_MESSAGE_WDS_BIND_MUX_DATA_PORT
     { "wds-bind-mux-data-port", 0, 0, G_OPTION_ARG_STRING, &bind_mux_str,
-      "Bind qmux data port to controller device (allowed keys: mux-id, ep-iface-number) to be used with `--client-no-release-cid'",
+      "Bind qmux data port to controller device (allowed keys: mux-id, ep-type (undefined|hsusb|pcie|embedded|bam-dmux), ep-iface-number) to be used with `--client-no-release-cid'",
       "[\"key=value,...\"]"
     },
 #endif
@@ -239,11 +255,48 @@ static GOptionEntry entries[] = {
       NULL
     },
 #endif
+#if defined HAVE_QMI_MESSAGE_WDS_GET_LTE_ATTACH_PARAMETERS
+    { "wds-get-lte-attach-parameters", 0, 0, G_OPTION_ARG_NONE, &get_lte_attach_parameters_flag,
+      "Get LTE attach parameters",
+      NULL
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_WDS_GET_MAX_LTE_ATTACH_PDN_NUMBER
+    { "wds-get-max-lte-attach-pdn-num", 0, 0, G_OPTION_ARG_NONE, &get_max_lte_attach_pdn_number_flag,
+      "Get the maximum number of LTE attach PDN",
+      NULL
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_WDS_GET_LTE_ATTACH_PDN_LIST
+    { "wds-get-lte-attach-pdn-list", 0, 0, G_OPTION_ARG_NONE, &get_lte_attach_pdn_list_flag,
+      "Get the list of LTE attach PDN",
+      NULL
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_WDS_SET_LTE_ATTACH_PDN_LIST
+    { "wds-set-lte-attach-pdn-list", 0, 0, G_OPTION_ARG_STRING, &set_lte_attach_pdn_list_str,
+      "Set the list of LTE attach PDN",
+      "[#,#,...]"
+    },
+#endif
     { "wds-noop", 0, 0, G_OPTION_ARG_NONE, &noop_flag,
       "Just allocate or release a WDS client. Use with `--client-no-release-cid' and/or `--client-cid'",
       NULL
     },
-    { NULL }
+    /* deprecated entries (hidden in --help) */
+#if defined HAVE_QMI_MESSAGE_WDS_GET_DEFAULT_PROFILE_NUMBER
+    { "wds-get-default-profile-num", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &get_default_profile_num_str,
+      "Get default profile number",
+      "[3gpp|3gpp2]"
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_WDS_SET_DEFAULT_PROFILE_NUMBER
+    { "wds-set-default-profile-num", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &set_default_profile_num_str,
+      "Set default profile number",
+      "[(3gpp|3gpp2),#]"
+    },
+#endif
+    { NULL, 0, 0, 0, NULL, NULL, NULL }
 };
 
 GOptionGroup *
@@ -272,6 +325,7 @@ qmicli_wds_options_enabled (void)
 
     n_actions = (!!start_network_str +
                  !!stop_network_str +
+                 !!bind_data_port_str +
                  !!bind_mux_str +
                  !!set_ip_family_str +
                  get_current_settings_flag +
@@ -288,13 +342,19 @@ qmicli_wds_options_enabled (void)
                  !!delete_profile_str +
                  !!get_profile_list_str +
                  !!get_default_profile_num_str +
+                 !!get_default_profile_number_str +
                  !!set_default_profile_num_str +
+                 !!set_default_profile_number_str +
                  !!get_default_settings_str +
                  get_autoconnect_settings_flag +
                  !!set_autoconnect_settings_str +
                  get_supported_messages_flag +
                  reset_flag +
                  !!get_channel_rates_flag +
+                 get_lte_attach_parameters_flag +
+                 get_max_lte_attach_pdn_number_flag +
+                 get_lte_attach_pdn_list_flag +
+                 !!set_lte_attach_pdn_list_str +
                  noop_flag);
 
     if (n_actions > 1) {
@@ -385,7 +445,7 @@ internal_stop_network (GCancellable *cancellable,
     g_print ("Network cancelled... releasing resources\n");
     qmi_client_wds_stop_network (ctx->client,
                                  input,
-                                 10,
+                                 120,
                                  ctx->cancellable,
                                  (GAsyncReadyCallback)stop_network_ready,
                                  NULL);
@@ -584,7 +644,7 @@ start_network_input_create (const gchar                     *str,
                             QmiMessageWdsStartNetworkInput **input,
                             GError                         **error)
 {
-    gchar *aux_auth_str = NULL;
+    g_autofree gchar *aux_auth_str = NULL;
     const gchar *ip_type_str = NULL;
     gchar **split = NULL;
     StartNetworkProperties props = {
@@ -700,7 +760,6 @@ out:
     g_free     (props.apn);
     g_free     (props.username);
     g_free     (props.password);
-    g_free     (aux_auth_str);
 
     return success;
 }
@@ -1109,8 +1168,8 @@ print_current_data_bearer_technology_results (const gchar *which,
                                               guint32 rat_mask,
                                               guint32 so_mask)
 {
-    gchar *rat_string = NULL;
-    gchar *so_string = NULL;
+    g_autofree gchar *rat_string = NULL;
+    g_autofree gchar *so_string = NULL;
 
     if (network_type == QMI_WDS_NETWORK_TYPE_3GPP2) {
         rat_string = qmi_wds_rat_3gpp2_build_string_from_mask (rat_mask);
@@ -1128,14 +1187,11 @@ print_current_data_bearer_technology_results (const gchar *which,
              qmi_device_get_path_display (ctx->device),
              which,
              qmi_wds_network_type_get_string (network_type),
-             VALIDATE_UNKNOWN (rat_string));
+             VALIDATE_MASK_NONE (rat_string));
 
     if (network_type == QMI_WDS_NETWORK_TYPE_3GPP2)
         g_print ("            Service Option: '%s'\n",
-                 VALIDATE_UNKNOWN (so_string));
-
-    g_free (rat_string);
-    g_free (so_string);
+                 VALIDATE_MASK_NONE (so_string));
 }
 
 static void
@@ -1319,6 +1375,8 @@ typedef struct {
     gchar                *name;
     QmiWdsPdpType         pdp_type;
     gboolean              pdp_type_set;
+    QmiWdsApnTypeMask     apn_type;
+    gboolean              apn_type_set;
     gchar                *apn;
     gchar                *username;
     gchar                *password;
@@ -1407,6 +1465,19 @@ create_modify_profile_properties_handle (const gchar  *key,
             return FALSE;
         }
         props->pdp_type_set = TRUE;
+        return TRUE;
+    }
+
+    if (g_ascii_strcasecmp (key, "apn-type-mask") == 0 && !props->apn_type_set) {
+        if (!qmicli_read_wds_apn_type_mask_from_string (value, &(props->apn_type))) {
+            g_set_error (error,
+                         QMI_CORE_ERROR,
+                         QMI_CORE_ERROR_FAILED,
+                         "unknown apn type '%s'",
+                         value);
+            return FALSE;
+        }
+        props->apn_type_set = TRUE;
         return TRUE;
     }
 
@@ -1510,6 +1581,9 @@ create_profile_input_create (const gchar                      *str,
 
     if (props.pdp_type_set)
         qmi_message_wds_create_profile_input_set_pdp_type (*input, props.pdp_type, NULL);
+
+    if (props.apn_type_set)
+        qmi_message_wds_create_profile_input_set_apn_type_mask (*input, props.apn_type, NULL);
 
     if (props.name)
         qmi_message_wds_create_profile_input_set_profile_name (*input, props.name, NULL);
@@ -1824,6 +1898,9 @@ modify_profile_input_create (const gchar                      *str,
     if (props.pdp_type_set)
         qmi_message_wds_modify_profile_input_set_pdp_type (*input, props.pdp_type, NULL);
 
+    if (props.apn_type_set)
+        qmi_message_wds_modify_profile_input_set_apn_type_mask (*input, props.apn_type, NULL);
+
     if (props.name)
         qmi_message_wds_modify_profile_input_set_profile_name (*input, props.name, NULL);
 
@@ -1989,10 +2066,17 @@ get_profile_settings_ready (QmiClientWds *client,
         guint8 context_number;
         QmiWdsPdpType pdp_type;
         QmiWdsAuthentication auth;
+        QmiWdsApnTypeMask apn_type;
         gboolean flag;
 
         if (qmi_message_wds_get_profile_settings_output_get_apn_name (output, &str, NULL))
             g_print ("\t\tAPN: '%s'\n", str);
+        if (qmi_message_wds_get_profile_settings_output_get_apn_type_mask (output, &apn_type, NULL)) {
+            g_autofree gchar *aux = NULL;
+
+            aux = qmi_wds_apn_type_mask_build_string_from_mask (apn_type);
+            g_print ("\t\tAPN type: '%s'\n", VALIDATE_MASK_NONE (aux));
+        }
         if (qmi_message_wds_get_profile_settings_output_get_pdp_type (output, &pdp_type, NULL))
             g_print ("\t\tPDP type: '%s'\n", qmi_wds_pdp_type_get_string (pdp_type));
         if (qmi_message_wds_get_profile_settings_output_get_pdp_context_number (output, &context_number, NULL))
@@ -2002,11 +2086,10 @@ get_profile_settings_ready (QmiClientWds *client,
         if (qmi_message_wds_get_profile_settings_output_get_password (output, &str, NULL))
             g_print ("\t\tPassword: '%s'\n", str);
         if (qmi_message_wds_get_profile_settings_output_get_authentication (output, &auth, NULL)) {
-            gchar *aux;
+            g_autofree gchar *aux = NULL;
 
             aux = qmi_wds_authentication_build_string_from_mask (auth);
-            g_print ("\t\tAuth: '%s'\n", aux);
-            g_free (aux);
+            g_print ("\t\tAuth: '%s'\n", VALIDATE_MASK_NONE (aux));
         }
         if (qmi_message_wds_get_profile_settings_output_get_roaming_disallowed_flag (output, &flag, NULL))
             g_print ("\t\tNo roaming: '%s'\n", flag ? "yes" : "no");
@@ -2169,11 +2252,10 @@ get_default_settings_ready (QmiClientWds *client,
     if (qmi_message_wds_get_default_settings_output_get_password (output, &str, NULL))
         g_print ("\tPassword: '%s'\n", str);
     if (qmi_message_wds_get_default_settings_output_get_authentication (output, &auth, NULL)) {
-        gchar *aux;
+        g_autofree gchar *aux = NULL;
 
         aux = qmi_wds_authentication_build_string_from_mask (auth);
-        g_print ("\tAuth: '%s'\n", aux);
-        g_free (aux);
+        g_print ("\tAuth: '%s'\n", VALIDATE_MASK_NONE (aux));
     }
 
     qmi_message_wds_get_default_settings_output_unref (output);
@@ -2182,81 +2264,74 @@ get_default_settings_ready (QmiClientWds *client,
 
 #endif /* HAVE_QMI_MESSAGE_WDS_GET_DEFAULT_SETTINGS */
 
-#if defined HAVE_QMI_MESSAGE_WDS_GET_DEFAULT_PROFILE_NUM
+#if defined HAVE_QMI_MESSAGE_WDS_GET_DEFAULT_PROFILE_NUMBER
 
 static void
-get_default_profile_num_ready (QmiClientWds *client,
-                               GAsyncResult *res)
+get_default_profile_number_ready (QmiClientWds *client,
+                                  GAsyncResult *res)
 {
-    QmiMessageWdsGetDefaultProfileNumOutput *output;
-    GError *error = NULL;
-    guint8 profile_num;
+    g_autoptr(QmiMessageWdsGetDefaultProfileNumberOutput) output = NULL;
+    g_autoptr(GError)                                     error = NULL;
+    guint8                                                profile_num;
 
-    output = qmi_client_wds_get_default_profile_num_finish (client, res, &error);
+    output = qmi_client_wds_get_default_profile_number_finish (client, res, &error);
     if (!output) {
         g_printerr ("error: operation failed: %s\n", error->message);
-        g_error_free (error);
         operation_shutdown (FALSE);
         return;
     }
 
-    if (!qmi_message_wds_get_default_profile_num_output_get_result (output, &error)) {
+    if (!qmi_message_wds_get_default_profile_number_output_get_result (output, &error)) {
         QmiWdsDsProfileError ds_profile_error;
 
         if (g_error_matches (error,
                              QMI_PROTOCOL_ERROR,
                              QMI_PROTOCOL_ERROR_EXTENDED_INTERNAL) &&
-            qmi_message_wds_get_default_profile_num_output_get_extended_error_code (
+            qmi_message_wds_get_default_profile_number_output_get_extended_error_code (
                 output,
                 &ds_profile_error,
                 NULL)) {
-            g_printerr ("error: couldn't get default settings: ds profile error: %s\n",
+            g_printerr ("error: couldn't get default profile number: ds profile error: %s\n",
                         qmi_wds_ds_profile_error_get_string (ds_profile_error));
         } else {
-            g_printerr ("error: couldn't get default settings: %s\n",
+            g_printerr ("error: couldn't get default profile number: %s\n",
                         error->message);
         }
-        g_error_free (error);
-        qmi_message_wds_get_default_profile_num_output_unref (output);
         operation_shutdown (FALSE);
         return;
     }
 
     g_print ("Default profile number retrieved:\n");
-
-    if (qmi_message_wds_get_default_profile_num_output_get_default_profile_number (output, &profile_num, NULL))
+    if (qmi_message_wds_get_default_profile_number_output_get_index (output, &profile_num, NULL))
         g_print ("\tDefault profile number: '%d'\n", profile_num);
-
-    qmi_message_wds_get_default_profile_num_output_unref (output);
     operation_shutdown (TRUE);
 }
 
-#endif /* HAVE_QMI_MESSAGE_WDS_GET_DEFAULT_PROFILE_NUM */
+#endif /* HAVE_QMI_MESSAGE_WDS_GET_DEFAULT_PROFILE_NUMBER */
 
-#if defined HAVE_QMI_MESSAGE_WDS_SET_DEFAULT_PROFILE_NUM
+#if defined HAVE_QMI_MESSAGE_WDS_SET_DEFAULT_PROFILE_NUMBER
 
 static void
-set_default_profile_num_ready (QmiClientWds *client,
-                               GAsyncResult *res)
+set_default_profile_number_ready (QmiClientWds *client,
+                                  GAsyncResult *res)
 {
-    QmiMessageWdsSetDefaultProfileNumOutput *output;
-    GError *error = NULL;
+    g_autoptr(QmiMessageWdsSetDefaultProfileNumberOutput) output = NULL;
+    g_autoptr(GError)                                     error = NULL;
 
-    output = qmi_client_wds_set_default_profile_num_finish (client, res, &error);
+    output = qmi_client_wds_set_default_profile_number_finish (client, res, &error);
     if (!output) {
         g_printerr ("error: operation failed: %s\n", error->message);
-        g_error_free (error);
         operation_shutdown (FALSE);
         return;
     }
 
-    if (!qmi_message_wds_set_default_profile_num_output_get_result (output, &error)) {
+    if (!qmi_message_wds_set_default_profile_number_output_get_result (output, &error)) {
         QmiWdsDsProfileError ds_profile_error;
 
         if (g_error_matches (error,
                              QMI_PROTOCOL_ERROR,
                              QMI_PROTOCOL_ERROR_EXTENDED_INTERNAL) &&
-            qmi_message_wds_set_default_profile_num_output_get_extended_error_code (
+            qmi_message_wds_set_default_profile_number_output_get_extended_error_code (
                 output,
                 &ds_profile_error,
                 NULL)) {
@@ -2266,32 +2341,29 @@ set_default_profile_num_ready (QmiClientWds *client,
             g_printerr ("error: couldn't set default settings: %s\n",
                         error->message);
         }
-        g_error_free (error);
-        qmi_message_wds_set_default_profile_num_output_unref (output);
         operation_shutdown (FALSE);
         return;
     }
 
     g_print ("Default profile number updated\n");
-    qmi_message_wds_set_default_profile_num_output_unref (output);
     operation_shutdown (TRUE);
 }
 
-static QmiMessageWdsSetDefaultProfileNumInput *
-set_default_profile_num_input_create (const gchar *str)
+static QmiMessageWdsSetDefaultProfileNumberInput *
+set_default_profile_number_input_create (const gchar *str)
 {
-    QmiMessageWdsSetDefaultProfileNumInput *input;
-    GError *error = NULL;
-    gchar **split;
-    QmiWdsProfileType profile_type;
-    guint profile_num;
+    g_autoptr(QmiMessageWdsSetDefaultProfileNumberInput) input = NULL;
+    g_autoptr(GError)                                    error = NULL;
+    g_auto(GStrv)                                        split = NULL;
+    QmiWdsProfileType                                    profile_type;
+    guint                                                profile_num;
 
     split = g_strsplit (str, ",", -1);
-    input = qmi_message_wds_set_default_profile_num_input_new ();
+    input = qmi_message_wds_set_default_profile_number_input_new ();
 
     if (g_strv_length (split) != 2) {
         g_printerr ("error: expected 2 options in default profile number settings\n");
-        goto error_out;
+        return NULL;
     }
 
     g_strstrip (split[0]);
@@ -2300,9 +2372,8 @@ set_default_profile_num_input_create (const gchar *str)
     else if (g_str_equal (split[0], "3gpp2"))
         profile_type = QMI_WDS_PROFILE_TYPE_3GPP2;
     else {
-        g_printerr ("error: invalid profile type '%s'. Expected '3gpp' or '3gpp2'.'\n",
-                    split[0]);
-        goto error_out;
+        g_printerr ("error: invalid profile type '%s'. Expected '3gpp' or '3gpp2'.'\n", split[0]);
+        return NULL;
     }
 
     g_strstrip (split[1]);
@@ -2311,31 +2382,23 @@ set_default_profile_num_input_create (const gchar *str)
         g_printerr ("error: invalid or out of range profile number [1,%u]: '%s'\n",
                     G_MAXUINT8,
                     split[1]);
-        goto error_out;
+        return NULL;
     }
 
-    if (!qmi_message_wds_set_default_profile_num_input_set_profile_identifier (
+    if (!qmi_message_wds_set_default_profile_number_input_set_profile_identifier (
             input,
             profile_type,
             QMI_WDS_PROFILE_FAMILY_TETHERED,
             (guint8)profile_num,
             &error)) {
         g_printerr ("error: couldn't create input bundle: '%s'\n", error->message);
-        goto error_out;
+        return NULL;
     }
 
-    g_strfreev (split);
-    return input;
-
-error_out:
-    if (error)
-        g_error_free (error);
-    g_strfreev (split);
-    qmi_message_wds_set_default_profile_num_input_unref (input);
-    return NULL;
+    return g_steal_pointer (&input);
 }
 
-#endif /* HAVE_QMI_MESSAGE_WDS_SET_DEFAULT_PROFILE_NUM */
+#endif /* HAVE_QMI_MESSAGE_WDS_SET_DEFAULT_PROFILE_NUMBER */
 
 #if defined HAVE_QMI_MESSAGE_WDS_GET_AUTOCONNECT_SETTINGS
 
@@ -2547,11 +2610,58 @@ noop_cb (gpointer unused)
     return FALSE;
 }
 
+#if defined HAVE_QMI_MESSAGE_WDS_BIND_DATA_PORT
+
+static QmiMessageWdsBindDataPortInput *
+bind_data_port_input_create (const gchar *str)
+{
+    g_autoptr(QmiMessageWdsBindDataPortInput) input = NULL;
+    g_autoptr(GError)                         error = NULL;
+    QmiSioPort                                sio_port;
+
+    sio_port = strtoul(str, NULL, 0);
+    if (!sio_port && !qmicli_read_sio_port_from_string (str, &sio_port))
+        return NULL;
+
+    input = qmi_message_wds_bind_data_port_input_new ();
+    if (!qmi_message_wds_bind_data_port_input_set_data_port (input, sio_port, &error)) {
+        g_printerr ("error: couldn't set data port: '%s'\n", error->message);
+        return NULL;
+    }
+
+    return g_steal_pointer (&input);
+}
+
+static void
+bind_data_port_ready (QmiClientWds *client,
+                      GAsyncResult *res)
+{
+    g_autoptr(QmiMessageWdsBindDataPortOutput) output = NULL;
+    g_autoptr(GError)                          error = NULL;
+
+    output = qmi_client_wds_bind_data_port_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_wds_bind_data_port_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't bind data port: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_WDS_BIND_DATA_PORT */
+
 #if defined HAVE_QMI_MESSAGE_WDS_BIND_MUX_DATA_PORT
 
 typedef struct {
     guint8 mux_id;
-    guint8 ep_type;
+    QmiDataEndpointType ep_type;
     gint ep_iface_number;
     QmiWdsClientType client_type;
 } BindMuxDataPortProperties;
@@ -2565,11 +2675,8 @@ bind_mux_data_port_properties_handle (const gchar *key,
     BindMuxDataPortProperties *props = user_data;
 
     if (!value || !value[0]) {
-        g_set_error (error,
-                     QMI_CORE_ERROR,
-                     QMI_CORE_ERROR_FAILED,
-                     "key '%s' requires a value",
-                     key);
+        g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
+                     "key '%s' requires a value", key);
         return FALSE;
     }
 
@@ -2579,10 +2686,19 @@ bind_mux_data_port_properties_handle (const gchar *key,
         /* QMI_WDS_MUX_ID_UNDEFINED is G_MAXUINT8 (0xff) */
         if (!qmicli_read_uint_from_string (value, &aux) || (aux >= G_MAXUINT8)) {
             g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
-                         "failed reading key 'mux-id' value in range [0,254]");
+                         "failed reading key 'mux-id' value in range [0,254]: '%s'", value);
             return FALSE;
         }
         props->mux_id = (guint8) aux;
+        return TRUE;
+    }
+
+    if (g_ascii_strcasecmp (key, "ep-type") == 0) {
+        if (!qmicli_read_data_endpoint_type_from_string (value, &(props->ep_type))) {
+            g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
+                         "failed reading key 'ep-type' value: '%s'", value);
+            return FALSE;
+        }
         return TRUE;
     }
 
@@ -2591,7 +2707,7 @@ bind_mux_data_port_properties_handle (const gchar *key,
 
         if (!qmicli_read_uint_from_string (value, &aux)) {
             g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
-                         "failed reading key 'ep-iface-number' value");
+                         "failed reading key 'ep-iface-number' value: '%s'", value);
             return FALSE;
         }
 
@@ -2599,12 +2715,8 @@ bind_mux_data_port_properties_handle (const gchar *key,
         return TRUE;
     }
 
-    g_set_error (error,
-                 QMI_CORE_ERROR,
-                 QMI_CORE_ERROR_FAILED,
-                 "Unrecognized option '%s'",
-                 key);
-
+    g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
+                 "unrecognized key: '%s'", key);
     return FALSE;
 }
 
@@ -2790,6 +2902,196 @@ get_channel_rates_ready (QmiClientWds *client,
 
 #endif /* HAVE_QMI_MESSAGE_WDS_GET_CHANNEL_RATES */
 
+#if defined HAVE_QMI_MESSAGE_WDS_GET_LTE_ATTACH_PARAMETERS
+
+static void
+get_lte_attach_parameters_ready (QmiClientWds *client,
+                                 GAsyncResult *res)
+{
+    g_autoptr(QmiMessageWdsGetLteAttachParametersOutput)  output = NULL;
+    g_autoptr(GError)                                     error = NULL;
+    const gchar                                          *apn;
+    gboolean                                              ota_attach_performed;
+    QmiWdsIpSupportType                                   ip_support_type;
+
+    output = qmi_client_wds_get_lte_attach_parameters_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_wds_get_lte_attach_parameters_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't get LTE attach parameters: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("LTE attach parameters successfully retrieved:\n");
+    if (qmi_message_wds_get_lte_attach_parameters_output_get_apn (output, &apn, NULL))
+        g_print ("\tAPN: %s\n", apn);
+    if (qmi_message_wds_get_lte_attach_parameters_output_get_ip_support_type (output, &ip_support_type, NULL))
+        g_print ("\tIP support type: %s\n", qmi_wds_ip_support_type_get_string (ip_support_type));
+    if (qmi_message_wds_get_lte_attach_parameters_output_get_ota_attach_performed (output, &ota_attach_performed, NULL))
+        g_print ("\tOTA attach performed: %s\n", ota_attach_performed ? "yes" : "no");
+
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_WDS_GET_LTE_ATTACH_PARAMETERS */
+
+#if defined HAVE_QMI_MESSAGE_WDS_GET_MAX_LTE_ATTACH_PDN_NUMBER
+
+static void
+get_max_lte_attach_pdn_number_ready (QmiClientWds *client,
+                                     GAsyncResult *res)
+{
+    g_autoptr(QmiMessageWdsGetMaxLteAttachPdnNumberOutput) output = NULL;
+    g_autoptr(GError)                                      error = NULL;
+    guint8                                                 maxnum = 0;
+
+    output = qmi_client_wds_get_max_lte_attach_pdn_number_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_wds_get_max_lte_attach_pdn_number_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't get maximum number of attach PDN: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    qmi_message_wds_get_max_lte_attach_pdn_number_output_get_info (output, &maxnum, NULL);
+    g_print ("Maximum number of LTE attach PDN: %u\n", maxnum);
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_WDS_GET_MAX_LTE_ATTACH_PDN_NUMBER */
+
+#if defined HAVE_QMI_MESSAGE_WDS_GET_LTE_ATTACH_PDN_LIST
+
+static void
+get_lte_attach_pdn_list_ready (QmiClientWds *client,
+                               GAsyncResult *res)
+{
+    g_autoptr(QmiMessageWdsGetLteAttachPdnListOutput) output = NULL;
+    g_autoptr(GError)                                 error = NULL;
+    GArray                                           *current_list = NULL;
+    GArray                                           *pending_list = NULL;
+    guint                                             i;
+
+    output = qmi_client_wds_get_lte_attach_pdn_list_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_wds_get_lte_attach_pdn_list_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't get the list of LTE attach PDN: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("Attach PDN list retrieved:\n");
+
+    qmi_message_wds_get_lte_attach_pdn_list_output_get_current_list (output, &current_list, NULL);
+    if (!current_list || !current_list->len) {
+        g_print ("\tCurrent list: n/a\n");
+    } else {
+        g_print ("\tCurrent list: '");
+        for (i = 0; i < current_list->len; i++)
+            g_print ("%s%u", i > 0 ? ", " : "", g_array_index (current_list, guint16, i));
+        g_print ("'\n");
+    }
+
+    qmi_message_wds_get_lte_attach_pdn_list_output_get_pending_list (output, &pending_list, NULL);
+    if (!pending_list || !pending_list->len) {
+        g_print ("\tPending list: n/a\n");
+    } else {
+        g_print ("\tPending list: '");
+        for (i = 0; i < pending_list->len; i++)
+            g_print ("%s%u", i > 0 ? ", " : "", g_array_index (pending_list, guint16, i));
+        g_print ("'\n");
+    }
+
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_WDS_GET_LTE_ATTACH_PDN_LIST */
+
+#if defined HAVE_QMI_MESSAGE_WDS_SET_LTE_ATTACH_PDN_LIST
+
+static QmiMessageWdsSetLteAttachPdnListInput *
+set_lte_attach_pdn_list_input_create (const gchar *str)
+{
+    g_autoptr(QmiMessageWdsSetLteAttachPdnListInput) input = NULL;
+    g_autoptr(GError)                                error = NULL;
+    g_auto(GStrv)                                    split = NULL;
+    g_autoptr(GArray)                                pdn_list = NULL;
+    guint                                            i;
+
+    pdn_list = g_array_new (FALSE, FALSE, sizeof (guint16));
+
+    split = g_strsplit (str, ",", -1);
+
+    for (i = 0; i < g_strv_length (split); i++) {
+        guint    val = 0;
+        guint16  profile_index;
+        gboolean success;
+
+        g_strstrip (split[i]);
+        success = qmicli_read_uint_from_string (split[i], &val);
+        if (!success || val == 0 || val > G_MAXUINT16) {
+            g_printerr ("error: invalid or out of range profile number [1,%u]: '%s'\n", G_MAXUINT16, split[i]);
+            operation_shutdown (FALSE);
+            return NULL;
+        }
+        profile_index = (guint16) val;
+        g_array_append_val (pdn_list, profile_index);
+    }
+
+    input = qmi_message_wds_set_lte_attach_pdn_list_input_new ();
+    if (!qmi_message_wds_set_lte_attach_pdn_list_input_set_list (input, pdn_list, &error)) {
+        g_printerr ("error: couldn't set attach PDN list: '%s'\n", error->message);
+        return NULL;
+    }
+    if (!qmi_message_wds_set_lte_attach_pdn_list_input_set_action (input, QMI_WDS_ATTACH_PDN_LIST_ACTION_DETACH_OR_PDN_DISCONNECT, &error)) {
+        g_printerr ("error: couldn't set attach PDN list action: '%s'\n", error->message);
+        return NULL;
+    }
+
+    return g_steal_pointer (&input);
+}
+
+static void
+set_lte_attach_pdn_list_ready (QmiClientWds *client,
+                               GAsyncResult *res)
+{
+    g_autoptr(QmiMessageWdsSetLteAttachPdnListOutput) output = NULL;
+    g_autoptr(GError)                                 error = NULL;
+
+    output = qmi_client_wds_set_lte_attach_pdn_list_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_wds_set_lte_attach_pdn_list_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't set attach PDN list: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("Attach PDN list update successfully requested\n");
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_WDS_SET_LTE_ATTACH_PDN_LIST */
+
 void
 qmicli_wds_run (QmiDevice *device,
                 QmiClientWds *client,
@@ -2817,7 +3119,7 @@ qmicli_wds_run (QmiDevice *device,
         g_debug ("Asynchronously starting network...");
         qmi_client_wds_start_network (ctx->client,
                                       input,
-                                      45,
+                                      180,
                                       ctx->cancellable,
                                       (GAsyncReadyCallback)start_network_ready,
                                       NULL);
@@ -2854,6 +3156,26 @@ qmicli_wds_run (QmiDevice *device,
         return;
     }
 #endif /* HAVE_QMI_MESSAGE_WDS_STOP_NETWORK */
+
+#if defined HAVE_QMI_MESSAGE_WDS_BIND_DATA_PORT
+    if (bind_data_port_str) {
+        g_autoptr(QmiMessageWdsBindDataPortInput) input = NULL;
+
+        g_debug ("Binding data port...");
+        input = bind_data_port_input_create (bind_data_port_str);
+        if (!input) {
+            operation_shutdown (FALSE);
+            return;
+        }
+        qmi_client_wds_bind_data_port (client,
+                                       input,
+                                       10,
+                                       ctx->cancellable,
+                                       (GAsyncReadyCallback) bind_data_port_ready,
+                                       NULL);
+        return;
+    }
+#endif /* HAVE_QMI_MESSAGE_WDS_BIND_MUX_DATA_PORT */
 
 #if defined HAVE_QMI_MESSAGE_WDS_BIND_MUX_DATA_PORT
     if (bind_mux_str) {
@@ -2909,13 +3231,13 @@ qmicli_wds_run (QmiDevice *device,
         input = qmi_message_wds_get_current_settings_input_new ();
         qmi_message_wds_get_current_settings_input_set_requested_settings (
             input,
-            (QMI_WDS_GET_CURRENT_SETTINGS_REQUESTED_SETTINGS_DNS_ADDRESS      |
-             QMI_WDS_GET_CURRENT_SETTINGS_REQUESTED_SETTINGS_GRANTED_QOS      |
-             QMI_WDS_GET_CURRENT_SETTINGS_REQUESTED_SETTINGS_IP_ADDRESS       |
-             QMI_WDS_GET_CURRENT_SETTINGS_REQUESTED_SETTINGS_GATEWAY_INFO     |
-             QMI_WDS_GET_CURRENT_SETTINGS_REQUESTED_SETTINGS_MTU              |
-             QMI_WDS_GET_CURRENT_SETTINGS_REQUESTED_SETTINGS_DOMAIN_NAME_LIST |
-             QMI_WDS_GET_CURRENT_SETTINGS_REQUESTED_SETTINGS_IP_FAMILY),
+            (QMI_WDS_REQUESTED_SETTINGS_DNS_ADDRESS      |
+             QMI_WDS_REQUESTED_SETTINGS_GRANTED_QOS      |
+             QMI_WDS_REQUESTED_SETTINGS_IP_ADDRESS       |
+             QMI_WDS_REQUESTED_SETTINGS_GATEWAY_INFO     |
+             QMI_WDS_REQUESTED_SETTINGS_MTU              |
+             QMI_WDS_REQUESTED_SETTINGS_DOMAIN_NAME_LIST |
+             QMI_WDS_REQUESTED_SETTINGS_IP_FAMILY),
             NULL);
 
         g_debug ("Asynchronously getting current settings...");
@@ -3193,59 +3515,58 @@ qmicli_wds_run (QmiDevice *device,
     }
 #endif
 
-#if defined HAVE_QMI_MESSAGE_WDS_GET_DEFAULT_PROFILE_NUM
-    if (get_default_profile_num_str) {
-        QmiMessageWdsGetDefaultProfileNumInput *input;
-        QmiWdsProfileType profile_type;
+#if defined HAVE_QMI_MESSAGE_WDS_GET_DEFAULT_PROFILE_NUMBER
+    if (get_default_profile_number_str || get_default_profile_num_str) {
+        g_autoptr(QmiMessageWdsGetDefaultProfileNumberInput)  input = NULL;
+        QmiWdsProfileType                                     profile_type;
+        const gchar                                          *str;
 
-        if (g_str_equal (get_default_profile_num_str, "3gpp"))
+        str = get_default_profile_number_str ? get_default_profile_number_str : get_default_profile_num_str;
+        if (g_str_equal (str, "3gpp"))
             profile_type = QMI_WDS_PROFILE_TYPE_3GPP;
-        else if (g_str_equal (get_default_profile_num_str, "3gpp2"))
+        else if (g_str_equal (str, "3gpp2"))
             profile_type = QMI_WDS_PROFILE_TYPE_3GPP2;
         else {
-            g_printerr ("error: invalid profile type '%s'. Expected '3gpp' or '3gpp2'.'\n",
-                        get_default_profile_num_str);
+            g_printerr ("error: invalid profile type '%s'. Expected '3gpp' or '3gpp2'.'\n", str);
             operation_shutdown (FALSE);
             return;
         }
 
-        input = qmi_message_wds_get_default_profile_num_input_new ();
+        input = qmi_message_wds_get_default_profile_number_input_new ();
         /* always use profile family 'tethered', we don't really know what it means */
-        qmi_message_wds_get_default_profile_num_input_set_profile_type (input,
-                                                                        profile_type,
-                                                                        QMI_WDS_PROFILE_FAMILY_TETHERED,
-                                                                        NULL);
+        qmi_message_wds_get_default_profile_number_input_set_profile_type (input,
+                                                                           profile_type,
+                                                                           QMI_WDS_PROFILE_FAMILY_TETHERED,
+                                                                           NULL);
 
         g_debug ("Asynchronously getting default profile number...");
-        qmi_client_wds_get_default_profile_num (ctx->client,
-                                                input,
-                                                10,
-                                                ctx->cancellable,
-                                                (GAsyncReadyCallback)get_default_profile_num_ready,
-                                                NULL);
-        qmi_message_wds_get_default_profile_num_input_unref (input);
+        qmi_client_wds_get_default_profile_number (ctx->client,
+                                                   input,
+                                                   10,
+                                                   ctx->cancellable,
+                                                   (GAsyncReadyCallback)get_default_profile_number_ready,
+                                                   NULL);
         return;
     }
 #endif
 
-#if defined HAVE_QMI_MESSAGE_WDS_SET_DEFAULT_PROFILE_NUM
-    if (set_default_profile_num_str) {
-        QmiMessageWdsSetDefaultProfileNumInput *input;
+#if defined HAVE_QMI_MESSAGE_WDS_SET_DEFAULT_PROFILE_NUMBER
+    if (set_default_profile_number_str || set_default_profile_num_str) {
+        g_autoptr(QmiMessageWdsSetDefaultProfileNumberInput) input = NULL;
 
-        input = set_default_profile_num_input_create (set_default_profile_num_str);
+        input = set_default_profile_number_input_create (set_default_profile_number_str ? set_default_profile_number_str : set_default_profile_num_str);
         if (!input) {
             operation_shutdown (FALSE);
             return;
         }
 
         g_debug ("Asynchronously setting default profile number...");
-        qmi_client_wds_set_default_profile_num (ctx->client,
-                                                input,
-                                                10,
-                                                ctx->cancellable,
-                                                (GAsyncReadyCallback)set_default_profile_num_ready,
-                                                NULL);
-        qmi_message_wds_set_default_profile_num_input_unref (input);
+        qmi_client_wds_set_default_profile_number (ctx->client,
+                                                   input,
+                                                   10,
+                                                   ctx->cancellable,
+                                                   (GAsyncReadyCallback)set_default_profile_number_ready,
+                                                   NULL);
         return;
     }
 #endif
@@ -3348,6 +3669,61 @@ qmicli_wds_run (QmiDevice *device,
                                           ctx->cancellable,
                                           (GAsyncReadyCallback)get_channel_rates_ready,
                                           NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_WDS_GET_LTE_ATTACH_PARAMETERS
+    if (get_lte_attach_parameters_flag) {
+        g_debug ("Asynchronously getting LTE attach parameters...");
+        qmi_client_wds_get_lte_attach_parameters (client,
+                                                  NULL,
+                                                  10,
+                                                  ctx->cancellable,
+                                                  (GAsyncReadyCallback)get_lte_attach_parameters_ready,
+                                                  NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_WDS_GET_MAX_LTE_ATTACH_PDN_NUMBER
+    if (get_max_lte_attach_pdn_number_flag) {
+        g_debug ("Asynchronously getting max LTE attach PDN number...");
+        qmi_client_wds_get_max_lte_attach_pdn_number (client,
+                                                      NULL,
+                                                      10,
+                                                      ctx->cancellable,
+                                                      (GAsyncReadyCallback)get_max_lte_attach_pdn_number_ready,
+                                                      NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_WDS_GET_LTE_ATTACH_PDN_LIST
+    if (get_lte_attach_pdn_list_flag) {
+        g_debug ("Asynchronously getting LTE Attach PDN list...");
+        qmi_client_wds_get_lte_attach_pdn_list (client,
+                                                NULL,
+                                                10,
+                                                ctx->cancellable,
+                                                (GAsyncReadyCallback)get_lte_attach_pdn_list_ready,
+                                                NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_WDS_SET_LTE_ATTACH_PDN_LIST
+    if (set_lte_attach_pdn_list_str) {
+        g_autoptr(QmiMessageWdsSetLteAttachPdnListInput) input = NULL;
+
+        input = set_lte_attach_pdn_list_input_create (set_lte_attach_pdn_list_str);
+        g_debug ("Asynchronously setting LTE Attach PDN list...");
+        qmi_client_wds_set_lte_attach_pdn_list (client,
+                                                input,
+                                                10,
+                                                ctx->cancellable,
+                                                (GAsyncReadyCallback) set_lte_attach_pdn_list_ready,
+                                                NULL);
         return;
     }
 #endif
