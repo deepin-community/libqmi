@@ -15,7 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>
+ * Copyright (C) 2012-2023 Aleksander Morgado <aleksander@aleksander.es>
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc.
  */
 
 #include "config.h"
@@ -32,7 +33,7 @@
 
 #include <libqmi-glib.h>
 
-#if defined MBIM_QMUX_ENABLED
+#if QMI_MBIM_QMUX_SUPPORTED
 #include <libmbim-glib.h>
 #endif
 
@@ -50,13 +51,13 @@ static QmiClient *client;
 static QmiService service;
 static gboolean operation_status;
 static gboolean expect_indications;
+#if QMI_QRTR_SUPPORTED
+static QrtrBus *qrtr_bus;
+#endif
 
 /* Main options */
 static gchar *device_str;
 static gboolean get_service_version_info_flag;
-static gboolean get_wwan_iface_flag;
-static gboolean get_expected_data_format_flag;
-static gchar *set_expected_data_format_str;
 static gchar *device_set_instance_id_str;
 static gboolean device_open_version_info_flag;
 static gboolean device_open_sync_flag;
@@ -68,25 +69,19 @@ static gboolean device_open_auto_flag;
 static gchar *client_cid_str;
 static gboolean client_no_release_cid_flag;
 static gboolean verbose_flag;
+static gboolean verbose_full_flag;
 static gboolean silent_flag;
 static gboolean version_flag;
 
 static GOptionEntry main_entries[] = {
     { "device", 'd', 0, G_OPTION_ARG_STRING, &device_str,
+#if QMI_QRTR_SUPPORTED
+      "Specify device path or QRTR URI (e.g. qrtr://0)",
+      "[PATH|URI]"
+#else
       "Specify device path",
       "[PATH]"
-    },
-    { "get-wwan-iface", 'w', 0, G_OPTION_ARG_NONE, &get_wwan_iface_flag,
-      "Get the WWAN iface name associated with this control port",
-      NULL
-    },
-    { "get-expected-data-format", 'e', 0, G_OPTION_ARG_NONE, &get_expected_data_format_flag,
-      "Get the expected data format in the WWAN iface",
-      NULL
-    },
-    { "set-expected-data-format", 'E', 0, G_OPTION_ARG_STRING, &set_expected_data_format_str,
-      "Set the expected data format in the WWAN iface",
-      "[802-3|raw-ip]"
+#endif
     },
     { "get-service-version-info", 0, 0, G_OPTION_ARG_NONE, &get_service_version_info_flag,
       "Get service version info",
@@ -136,6 +131,10 @@ static GOptionEntry main_entries[] = {
       "Run action with verbose logs, including the debug ones",
       NULL
     },
+    { "verbose-full", 0, 0, G_OPTION_ARG_NONE, &verbose_full_flag,
+      "Run action with verbose logs, including the debug ones and personal info",
+      NULL
+    },
     { "silent", 0, 0, G_OPTION_ARG_NONE, &silent_flag,
       "Run action with no logs; not even the error/warning ones",
       NULL
@@ -144,7 +143,7 @@ static GOptionEntry main_entries[] = {
       "Print version",
       NULL
     },
-    { NULL }
+    { NULL, 0, 0, 0, NULL, NULL, NULL }
 };
 
 static gboolean
@@ -217,7 +216,7 @@ log_handler (const gchar *log_domain,
         g_assert_not_reached ();
     }
 
-    if (!verbose_flag && !err)
+    if (!verbose_flag && !verbose_full_flag && !err)
         return;
 
     g_fprintf (err ? stderr : stdout,
@@ -232,7 +231,7 @@ static void
 print_version_and_exit (void)
 {
     g_print (PROGRAM_NAME " " PROGRAM_VERSION "\n"
-             "Copyright (C) 2012-2020 Aleksander Morgado\n"
+             "Copyright (C) 2012-2023 Aleksander Morgado\n"
              "License GPLv2+: GNU GPL version 2 or later <http://gnu.org/licenses/gpl-2.0.html>\n"
              "This is free software: you are free to change and redistribute it.\n"
              "There is NO WARRANTY, to the extent permitted by law.\n"
@@ -250,10 +249,7 @@ generic_options_enabled (void)
         return !!n_actions;
 
     n_actions = (!!device_set_instance_id_str +
-                 get_service_version_info_flag +
-                 get_wwan_iface_flag +
-                 get_expected_data_format_flag +
-                 !!set_expected_data_format_str);
+                 get_service_version_info_flag);
 
     if (n_actions > 1) {
         g_printerr ("error: too many generic actions requested\n");
@@ -459,6 +455,55 @@ allocate_client_ready (QmiDevice *dev,
 #else
         break;
 #endif
+    case QMI_SERVICE_SAR:
+#if defined HAVE_QMI_SERVICE_SAR
+        qmicli_sar_run (dev, QMI_CLIENT_SAR (client), cancellable);
+        return;
+#else
+        break;
+#endif
+    case QMI_SERVICE_DPM:
+#if defined HAVE_QMI_SERVICE_DPM
+        qmicli_dpm_run (dev, QMI_CLIENT_DPM (client), cancellable);
+        return;
+#else
+        break;
+#endif
+    case QMI_SERVICE_FOX:
+#if defined HAVE_QMI_SERVICE_FOX
+        qmicli_fox_run (dev, QMI_CLIENT_FOX (client), cancellable);
+        return;
+#else
+        break;
+#endif
+    case QMI_SERVICE_ATR:
+#if defined HAVE_QMI_SERVICE_ATR
+        qmicli_atr_run (dev, QMI_CLIENT_ATR (client), cancellable);
+        return;
+#else
+        break;
+#endif
+    case QMI_SERVICE_IMSP:
+#if defined HAVE_QMI_SERVICE_IMSP
+        qmicli_imsp_run (dev, QMI_CLIENT_IMSP (client), cancellable);
+        return;
+#else
+        break;
+#endif
+    case QMI_SERVICE_IMSA:
+#if defined HAVE_QMI_SERVICE_IMSA
+        qmicli_imsa_run (dev, QMI_CLIENT_IMSA (client), cancellable);
+        return;
+#else
+        break;
+#endif
+    case QMI_SERVICE_IMS:
+#if defined HAVE_QMI_SERVICE_IMS
+        qmicli_ims_run (dev, QMI_CLIENT_IMS (client), cancellable);
+        return;
+#else
+        break;
+#endif
     case QMI_SERVICE_UNKNOWN:
     case QMI_SERVICE_CTL:
     case QMI_SERVICE_AUTH:
@@ -467,8 +512,6 @@ allocate_client_ready (QmiDevice *dev,
     case QMI_SERVICE_QCHAT:
     case QMI_SERVICE_RMTFS:
     case QMI_SERVICE_TEST:
-    case QMI_SERVICE_SAR:
-    case QMI_SERVICE_IMS:
     case QMI_SERVICE_ADC:
     case QMI_SERVICE_CSD:
     case QMI_SERVICE_MFS:
@@ -480,9 +523,7 @@ allocate_client_ready (QmiDevice *dev,
     case QMI_SERVICE_RFSA:
     case QMI_SERVICE_CSVT:
     case QMI_SERVICE_QCMAP:
-    case QMI_SERVICE_IMSP:
     case QMI_SERVICE_IMSVT:
-    case QMI_SERVICE_IMSA:
     case QMI_SERVICE_COEX:
     case QMI_SERVICE_STX:
     case QMI_SERVICE_BIT:
@@ -494,6 +535,7 @@ allocate_client_ready (QmiDevice *dev,
     case QMI_SERVICE_FOTA:
     case QMI_SERVICE_PDS:
     case QMI_SERVICE_OMA:
+    case QMI_SERVICE_SSC:
     default:
         break;
     }
@@ -632,89 +674,6 @@ device_get_service_version_info (QmiDevice *dev)
                                          NULL);
 }
 
-static gboolean
-device_set_expected_data_format_cb (QmiDevice *dev)
-{
-    QmiDeviceExpectedDataFormat expected;
-    GError *error = NULL;
-
-    if (!qmicli_read_device_expected_data_format_from_string (set_expected_data_format_str, &expected) ||
-        expected == QMI_DEVICE_EXPECTED_DATA_FORMAT_UNKNOWN)
-        g_printerr ("error: invalid requested data format: %s", set_expected_data_format_str);
-    else if (!qmi_device_set_expected_data_format (dev, expected, &error)) {
-        g_printerr ("error: cannot set expected data format: %s\n", error->message);
-        g_error_free (error);
-    } else
-        g_print ("[%s] expected data format set to: %s\n",
-                 qmi_device_get_path_display (dev),
-                 qmi_device_expected_data_format_get_string (expected));
-
-    /* We're done now */
-    qmicli_async_operation_done (!error, FALSE);
-
-    g_object_unref (dev);
-    return FALSE;
-}
-
-static void
-device_set_expected_data_format (QmiDevice *dev)
-{
-    g_debug ("Setting expected WWAN data format this control port...");
-    g_idle_add ((GSourceFunc) device_set_expected_data_format_cb, g_object_ref (dev));
-}
-
-static gboolean
-device_get_expected_data_format_cb (QmiDevice *dev)
-{
-    QmiDeviceExpectedDataFormat expected;
-    GError *error = NULL;
-
-    expected = qmi_device_get_expected_data_format (dev, &error);
-    if (expected == QMI_DEVICE_EXPECTED_DATA_FORMAT_UNKNOWN) {
-        g_printerr ("error: cannot get expected data format: %s\n", error->message);
-        g_error_free (error);
-    } else
-        g_print ("%s\n", qmi_device_expected_data_format_get_string (expected));
-
-    /* We're done now */
-    qmicli_async_operation_done (!error, FALSE);
-
-    g_object_unref (dev);
-    return FALSE;
-}
-
-static void
-device_get_expected_data_format (QmiDevice *dev)
-{
-    g_debug ("Getting expected WWAN data format this control port...");
-    g_idle_add ((GSourceFunc) device_get_expected_data_format_cb, g_object_ref (dev));
-}
-
-static gboolean
-device_get_wwan_iface_cb (QmiDevice *dev)
-{
-    const gchar *wwan_iface;
-
-    wwan_iface = qmi_device_get_wwan_iface (dev);
-    if (!wwan_iface)
-        g_printerr ("error: cannot get WWAN interface name\n");
-    else
-        g_print ("%s\n", wwan_iface);
-
-    /* We're done now */
-    qmicli_async_operation_done (!!wwan_iface, FALSE);
-
-    g_object_unref (dev);
-    return FALSE;
-}
-
-static void
-device_get_wwan_iface (QmiDevice *dev)
-{
-    g_debug ("Getting WWAN iface for this control port...");
-    g_idle_add ((GSourceFunc) device_get_wwan_iface_cb, g_object_ref (dev));
-}
-
 static void
 device_open_ready (QmiDevice *dev,
                    GAsyncResult *res)
@@ -734,12 +693,10 @@ device_open_ready (QmiDevice *dev,
         device_set_instance_id (dev);
     else if (get_service_version_info_flag)
         device_get_service_version_info (dev);
-    else if (get_wwan_iface_flag)
-        device_get_wwan_iface (dev);
-    else if (get_expected_data_format_flag)
-        device_get_expected_data_format (dev);
-    else if (set_expected_data_format_str)
-        device_set_expected_data_format (dev);
+    else if (qmicli_link_management_options_enabled ())
+        qmicli_link_management_run (dev, cancellable);
+    else if (qmicli_qmiwwan_options_enabled ())
+        qmicli_qmiwwan_run (dev, cancellable);
     else
         device_allocate_client (dev);
 }
@@ -792,16 +749,27 @@ device_new_ready (GObject *unused,
 }
 
 #if QMI_QRTR_SUPPORTED
-static void
-qrtr_node_ready (GObject *unused,
-                 GAsyncResult *res)
-{
-    QrtrNode *node;
-    GError *error = NULL;
 
-    node = qrtr_node_for_id_finish (res, &error);
+static void
+bus_new_ready (GObject      *source,
+               GAsyncResult *res,
+               gpointer      user_data)
+{
+    g_autoptr(GError)  error = NULL;
+    guint              node_id;
+    QrtrNode          *node;
+
+    node_id = GPOINTER_TO_UINT (user_data);
+
+    qrtr_bus = qrtr_bus_new_finish (res, &error);
+    if (!qrtr_bus) {
+        g_printerr ("error: couldn't access QRTR bus: %s\n", error->message);
+        exit (EXIT_FAILURE);
+    }
+
+    node = qrtr_bus_peek_node (qrtr_bus, node_id);
     if (!node) {
-        g_printerr ("error: couldn't open QRTR node: %s\n", error->message);
+        g_printerr ("error: node with id %u not found in QRTR bus\n", node_id);
         exit (EXIT_FAILURE);
     }
 
@@ -809,19 +777,14 @@ qrtr_node_ready (GObject *unused,
                               cancellable,
                               (GAsyncReadyCallback)device_new_ready,
                               NULL);
-
-    /* QmiDevice takes a reference, so we don't need this anymore. */
-    g_object_unref (node);
 }
+
 #endif
 
 static gboolean
 make_device (GFile *file)
 {
-    gchar *id;
-#if QMI_QRTR_SUPPORTED
-    guint32 node_id;
-#endif
+    g_autofree gchar *id = NULL;
 
     id = g_file_get_path (file);
     if (id) {
@@ -830,26 +793,27 @@ make_device (GFile *file)
                         cancellable,
                         (GAsyncReadyCallback)device_new_ready,
                         NULL);
-        g_free (id);
         return TRUE;
     }
 
 #if QMI_QRTR_SUPPORTED
-    id = g_file_get_uri (file);
-    if (!qrtr_get_node_for_uri (id, &node_id)) {
-        g_printerr ("error: URI wasn't a QRTR node: %s\n", id);
-        g_free (id);
+    {
+        guint32 node_id;
+
+        id = g_file_get_uri (file);
+        if (qrtr_get_node_for_uri (id, &node_id)) {
+            qrtr_bus_new (1000, /* ms */
+                          cancellable,
+                          (GAsyncReadyCallback)bus_new_ready,
+                          GUINT_TO_POINTER (node_id));
+            return TRUE;
+        }
+
+        g_printerr ("error: URI is neither a local file path nor a QRTR node: %s\n", id);
         return FALSE;
     }
-
-    qrtr_node_for_id (node_id,
-                      10,
-                      cancellable,
-                      (GAsyncReadyCallback)qrtr_node_ready,
-                      NULL);
-    g_free (id);
-    return TRUE;
 #else
+    g_printerr ("error: URI is not a local file path: %s\n", id);
     return FALSE;
 #endif
 }
@@ -861,9 +825,18 @@ parse_actions (void)
 {
     guint actions_enabled = 0;
 
-    /* Generic options? */
     if (generic_options_enabled ()) {
         service = QMI_SERVICE_CTL;
+        actions_enabled++;
+    }
+
+    if (qmicli_link_management_options_enabled ()) {
+        service = QMI_SERVICE_UNKNOWN;
+        actions_enabled++;
+    }
+
+    if (qmicli_qmiwwan_options_enabled ()) {
+        service = QMI_SERVICE_UNKNOWN;
         actions_enabled++;
     }
 
@@ -905,6 +878,13 @@ parse_actions (void)
 #if defined HAVE_QMI_SERVICE_UIM
     if (qmicli_uim_options_enabled ()) {
         service = QMI_SERVICE_UIM;
+        actions_enabled++;
+    }
+#endif
+
+#if defined HAVE_QMI_SERVICE_SAR
+    if (qmicli_sar_options_enabled ()) {
+        service = QMI_SERVICE_SAR;
         actions_enabled++;
     }
 #endif
@@ -965,6 +945,48 @@ parse_actions (void)
     }
 #endif
 
+#if defined HAVE_QMI_SERVICE_DPM
+    if (qmicli_dpm_options_enabled ()) {
+        service = QMI_SERVICE_DPM;
+        actions_enabled++;
+    }
+#endif
+
+#if defined HAVE_QMI_SERVICE_FOX
+    if (qmicli_fox_options_enabled ()) {
+        service = QMI_SERVICE_FOX;
+        actions_enabled++;
+    }
+#endif
+
+#if defined HAVE_QMI_SERVICE_ATR
+    if (qmicli_atr_options_enabled ()) {
+        service = QMI_SERVICE_ATR;
+        actions_enabled++;
+    }
+#endif
+
+#if defined HAVE_QMI_SERVICE_IMSP
+    if (qmicli_imsp_options_enabled ()) {
+        service = QMI_SERVICE_IMSP;
+        actions_enabled++;
+    }
+#endif
+
+#if defined HAVE_QMI_SERVICE_IMSA
+    if (qmicli_imsa_options_enabled ()) {
+        service = QMI_SERVICE_IMSA;
+        actions_enabled++;
+    }
+#endif
+
+#if defined HAVE_QMI_SERVICE_IMS
+    if (qmicli_ims_options_enabled ()) {
+        service = QMI_SERVICE_IMS;
+        actions_enabled++;
+    }
+#endif
+
     /* Cannot mix actions from different services */
     if (actions_enabled > 1) {
         g_printerr ("error: cannot execute multiple actions of different services\n");
@@ -1008,6 +1030,9 @@ int main (int argc, char **argv)
 #if defined HAVE_QMI_SERVICE_UIM
     g_option_context_add_group (context, qmicli_uim_get_option_group ());
 #endif
+#if defined HAVE_QMI_SERVICE_SAR
+    g_option_context_add_group (context, qmicli_sar_get_option_group ());
+#endif
 #if defined HAVE_QMI_SERVICE_WMS
     g_option_context_add_group (context, qmicli_wms_get_option_group ());
 #endif
@@ -1032,6 +1057,26 @@ int main (int argc, char **argv)
 #if defined HAVE_QMI_SERVICE_DSD
     g_option_context_add_group (context, qmicli_dsd_get_option_group ());
 #endif
+#if defined HAVE_QMI_SERVICE_DPM
+    g_option_context_add_group (context, qmicli_dpm_get_option_group ());
+#endif
+#if defined HAVE_QMI_SERVICE_FOX
+    g_option_context_add_group (context, qmicli_fox_get_option_group ());
+#endif
+#if defined HAVE_QMI_SERVICE_ATR
+    g_option_context_add_group (context, qmicli_atr_get_option_group ());
+#endif
+#if defined HAVE_QMI_SERVICE_IMSP
+    g_option_context_add_group (context, qmicli_imsp_get_option_group ());
+#endif
+#if defined HAVE_QMI_SERVICE_IMSA
+    g_option_context_add_group (context, qmicli_imsa_get_option_group ());
+#endif
+#if defined HAVE_QMI_SERVICE_IMS
+    g_option_context_add_group (context, qmicli_ims_get_option_group ());
+#endif
+    g_option_context_add_group (context, qmicli_link_management_get_option_group ());
+    g_option_context_add_group (context, qmicli_qmiwwan_get_option_group ());
     g_option_context_add_main_entries (context, main_entries, NULL);
     if (!g_option_context_parse (context, &argc, &argv, &error)) {
         g_printerr ("error: %s\n",
@@ -1045,14 +1090,37 @@ int main (int argc, char **argv)
 
     g_log_set_handler (NULL, G_LOG_LEVEL_MASK, log_handler, NULL);
     g_log_set_handler ("Qmi", G_LOG_LEVEL_MASK, log_handler, NULL);
-    if (verbose_flag)
-        qmi_utils_set_traces_enabled (TRUE);
 
-#if defined MBIM_QMUX_ENABLED
+    if (verbose_flag && verbose_full_flag) {
+        g_printerr ("error: cannot specify --verbose and --verbose-full at the same time\n");
+        exit (EXIT_FAILURE);
+    } else if (verbose_flag) {
+        qmi_utils_set_traces_enabled (TRUE);
+        qmi_utils_set_show_personal_info (FALSE);
+    } else if (verbose_full_flag) {
+        qmi_utils_set_traces_enabled (TRUE);
+        qmi_utils_set_show_personal_info (TRUE);
+    }
+
+#if QMI_MBIM_QMUX_SUPPORTED
     /* libmbim logging */
     g_log_set_handler ("Mbim", G_LOG_LEVEL_MASK, log_handler, NULL);
-    if (verbose_flag)
+    if (verbose_flag) {
         mbim_utils_set_traces_enabled (TRUE);
+#if MBIM_CHECK_VERSION(1,27,6)
+        mbim_utils_set_show_personal_info (FALSE);
+#endif
+    } else if (verbose_full_flag) {
+        mbim_utils_set_traces_enabled (TRUE);
+#if MBIM_CHECK_VERSION(1,27,6)
+        mbim_utils_set_show_personal_info (TRUE);
+#endif
+    }
+#endif
+
+#if QMI_QRTR_SUPPORTED
+    /* libqrtr-glib logging */
+    g_log_set_handler ("Qrtr", G_LOG_LEVEL_MASK, log_handler, NULL);
 #endif
 
     /* No device path given? */

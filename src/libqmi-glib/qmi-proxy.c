@@ -33,10 +33,11 @@
 
 #include "config.h"
 #include "qmi-enum-types.h"
+#include "qmi-flag-types.h"
 #include "qmi-error-types.h"
 #include "qmi-device.h"
 #include "qmi-ctl.h"
-#include "qmi-utils-private.h"
+#include "qmi-helpers.h"
 #include "qmi-proxy.h"
 #include "qmi-version.h"
 
@@ -49,9 +50,11 @@
 #define QMI_MESSAGE_OUTPUT_TLV_RESULT 0x02
 #define QMI_MESSAGE_OUTPUT_TLV_ALLOCATION_INFO 0x01
 #define QMI_MESSAGE_CTL_ALLOCATE_CID 0x0022
+#define QMI_MESSAGE_CTL_INTERNAL_ALLOCATE_CID_QRTR 0xFF22
 
 #define QMI_MESSAGE_INPUT_TLV_RELEASE_INFO 0x01
 #define QMI_MESSAGE_CTL_RELEASE_CID 0x0023
+#define QMI_MESSAGE_CTL_INTERNAL_RELEASE_CID_QRTR 0xFF23
 
 #define QMI_MESSAGE_CTL_INTERNAL_PROXY_OPEN 0xFF00
 #define QMI_MESSAGE_CTL_INTERNAL_PROXY_OPEN_INPUT_TLV_DEVICE_PATH 0x01
@@ -80,6 +83,10 @@ struct _QmiProxyPrivate {
      * application (e.g. they were allocated by a client application but
      * then not explicitly released). */
     GArray *disowned_qmi_client_info_array;
+
+#if QMI_QRTR_SUPPORTED
+    QrtrBus *qrtr_bus;
+#endif
 };
 
 /*****************************************************************************/
@@ -103,14 +110,21 @@ typedef struct {
     volatile gint ref_count;
 
     QmiProxy *proxy; /* not full ref */
+
+    /* client socket connection context */
     GSocketConnection *connection;
-    GSource *connection_readable_source;
-    GByteArray *buffer;
-    QmiDevice *device;
+    GSource           *connection_readable_source;
+    GByteArray        *buffer;
+
+    /* QMI device associated to connection */
+    QmiDevice  *device;
     QmiMessage *internal_proxy_open_request;
-    GArray *qmi_client_info_array;
-    guint indication_id;
-    guint device_removed_id;
+    GArray     *qmi_client_info_array;
+    guint       indication_id;
+    guint       device_removed_id;
+#if QMI_QRTR_SUPPORTED
+    guint node_id;
+#endif
 } Client;
 
 static gboolean connection_readable_cb (GSocket *socket, GIOCondition condition, Client *client);
@@ -157,6 +171,8 @@ client_unref (Client *client)
     }
 }
 
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (Client, client_unref)
+
 static Client *
 client_ref (Client *client)
 {
@@ -202,24 +218,6 @@ track_client (QmiProxy *self,
     g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_N_CLIENTS]);
 }
 
-static guint
-get_n_clients_with_device (QmiProxy *self,
-                           QmiDevice *device)
-{
-    GList *l;
-    guint n = 0;
-
-    for (l = self->priv->clients; l; l = g_list_next (l)) {
-        Client *client = l->data;
-
-        if (client->device && (device == client->device ||
-            g_str_equal (qmi_device_get_path (device), qmi_device_get_path (client->device))))
-            n++;
-    }
-
-    return n;
-}
-
 static void
 disown_not_released_clients (QmiProxy *self,
                              Client   *client)
@@ -249,11 +247,14 @@ disown_not_released_clients (QmiProxy *self,
     }
 }
 
+static void device_close_if_unused (QmiProxy  *self,
+                                    QmiDevice *device);
+
 static void
 untrack_client (QmiProxy *self,
                 Client   *client)
 {
-    QmiDevice *device;
+    g_autoptr(QmiDevice) device = NULL;
 
     device = client->device ? g_object_ref (client->device) : NULL;
 
@@ -269,28 +270,8 @@ untrack_client (QmiProxy *self,
         g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_N_CLIENTS]);
     }
 
-    if (!device)
-        return;
-
-    /* If no more clients using the device, close and cleanup */
-    if (get_n_clients_with_device (self, device) == 0) {
-        GList *l;
-
-        for (l = self->priv->devices; l; l = g_list_next (l)) {
-            QmiDevice *device_in_list = QMI_DEVICE (l->data);
-
-            if (device_in_list && (device == device_in_list ||
-                g_str_equal (qmi_device_get_path (device), qmi_device_get_path (device_in_list)))) {
-                g_debug ("closing device '%s': no longer used", qmi_device_get_path_display (device));
-                qmi_device_close_async (device_in_list, 0, NULL, NULL, NULL);
-                g_object_unref (device_in_list);
-                self->priv->devices = g_list_remove (self->priv->devices, device_in_list);
-                break;
-            }
-        }
-    }
-
-    g_object_unref (device);
+    if (device)
+        device_close_if_unused (self, device);
 }
 
 static QmiDevice *
@@ -456,34 +437,59 @@ out:
 }
 
 #if QMI_QRTR_SUPPORTED
-static void
-qrtr_node_ready (GObject *source,
-                 GAsyncResult *res,
-                 Client *client)
-{
-    QmiProxy *self = client->proxy;
-    QrtrNode *node;
-    GError *error = NULL;
 
-    node = qrtr_node_for_id_finish (res, &error);
+static void
+device_from_node (QmiProxy *self,
+                  Client   *client)
+{
+    QrtrNode *node;
+
+    g_assert (self->priv->qrtr_bus);
+
+    node = qrtr_bus_peek_node (self->priv->qrtr_bus, client->node_id);
     if (!node) {
-        g_debug ("couldn't open QRTR node: %s", error->message);
-        g_error_free (error);
+        g_debug ("node with id %u not found in QRTR bus", client->node_id);
         untrack_client (self, client);
-        goto out;
+        return;
     }
 
     qmi_device_new_from_node (node,
                               NULL,
                               (GAsyncReadyCallback)device_new_ready,
-                              client_ref (client)); /* Full ref */
+                              client_ref (client)); /* full reference */
+}
 
-    g_object_unref (node);
+static void
+bus_new_ready (GObject      *source,
+               GAsyncResult *res,
+               Client       *client)
+{
+    QmiProxy            *self;
+    g_autoptr(QrtrBus)   qrtr_bus = NULL;
+    g_autoptr(GError)    error = NULL;
 
-out:
-    /* Balance out the reference we got */
+    /* Note: we get a full client ref */
+
+    self = client->proxy;
+
+    qrtr_bus = qrtr_bus_new_finish (res, &error);
+    if (!qrtr_bus) {
+        g_debug ("couldn't access QRTR bus: %s", error->message);
+        untrack_client (self, client);
+        client_unref (client);
+        return;
+    }
+
+    /* Don't store the new bus if some other concurrent request already did
+     * it. We don't really care which bus object to use, we just need to use
+     * always the same */
+    if (!self->priv->qrtr_bus)
+        self->priv->qrtr_bus = g_object_ref (qrtr_bus);
+
+    device_from_node (self, client);
     client_unref (client);
 }
+
 #endif
 
 static gboolean
@@ -491,38 +497,33 @@ process_internal_proxy_open (QmiProxy   *self,
                              Client     *client,
                              QmiMessage *message)
 {
-    gsize   offset = 0;
-    gsize   init_offset;
-    gchar  *incoming_path;
-    gchar  *device_file_path;
-    GError *error = NULL;
+    gsize              offset = 0;
+    gsize              init_offset;
+    g_autofree gchar  *incoming_path = NULL;
+    g_autofree gchar  *device_file_path = NULL;
+    g_autoptr(GError)  error = NULL;
 
     if ((init_offset = qmi_message_tlv_read_init (message, QMI_MESSAGE_CTL_INTERNAL_PROXY_OPEN_INPUT_TLV_DEVICE_PATH, NULL, &error)) == 0) {
         g_debug ("ignoring message from client: invalid proxy open request: %s", error->message);
-        g_error_free (error);
         return FALSE;
     }
 
     if (!qmi_message_tlv_read_string (message, init_offset, &offset, 0, 0, &incoming_path, &error)) {
         g_debug ("ignoring message from client: invalid device file path: %s", error->message);
-        g_error_free (error);
         return FALSE;
     }
 
     /* The incoming path may be a symlink. In the proxy, we always use the real path of the
      * device, so that clients using different symlinks for the same file don't collide with
      * each other. */
-    device_file_path = __qmi_utils_get_devpath (incoming_path, &error);
+    device_file_path = qmi_helpers_get_devpath (incoming_path, &error);
     if (!device_file_path) {
         g_warning ("Error looking up real device path: %s", error->message);
-        g_error_free (error);
-        g_free (incoming_path);
         return FALSE;
     }
-    g_free (incoming_path);
 
     /* The remaining size of the buffer needs to be 0 if we successfully read the TLV */
-    if ((offset = __qmi_message_tlv_read_remaining_size (message, init_offset, offset)) > 0)
+    if ((offset = qmi_message_tlv_read_remaining_size (message, init_offset, offset)) > 0)
         g_warning ("Left '%" G_GSIZE_FORMAT "' bytes unread when getting the 'Device Path' TLV", offset);
 
     g_debug ("valid request to open connection to QMI device file: %s", device_file_path);
@@ -534,32 +535,33 @@ process_internal_proxy_open (QmiProxy   *self,
 
     /* Need to create a device ourselves */
     if (!client->device) {
-        GFile *file;
 #if QMI_QRTR_SUPPORTED
-        guint32 node_id;
-
-        if (qrtr_get_node_for_uri (device_file_path, &node_id)) {
-            qrtr_node_for_id (node_id,
-                              10, /* timeout in seconds */
+        if (qrtr_get_node_for_uri (device_file_path, &client->node_id)) {
+            if (!self->priv->qrtr_bus) {
+                qrtr_bus_new (1000, /* ms */
                               NULL,
-                              (GAsyncReadyCallback)qrtr_node_ready,
+                              (GAsyncReadyCallback)bus_new_ready,
                               client_ref (client)); /* Full ref */
-        } else
+                return TRUE;
+            }
+
+            device_from_node (self, client);
+            return TRUE;
+        }
 #endif
         {
+            g_autoptr(GFile) file = NULL;
+
             file = g_file_new_for_path (device_file_path);
             qmi_device_new (file,
                             NULL,
                             (GAsyncReadyCallback)device_new_ready,
                             client_ref (client)); /* Full ref */
-            g_object_unref (file);
+            return TRUE;
         }
-        g_free (device_file_path);
-        return TRUE;
-    } else
-        register_signal_handlers (client);
+    }
 
-    g_free (device_file_path);
+    register_signal_handlers (client);
 
     /* Keep a reference to the device in the client */
     g_object_ref (client->device);
@@ -592,14 +594,13 @@ static void
 track_cid (Client     *client,
            QmiMessage *message)
 {
-    gsize          offset = 0;
-    gsize          init_offset;
-    guint16        error_status;
-    guint16        error_code;
-    GError        *error = NULL;
-    guint8         service_tmp;
-    QmiClientInfo  info;
-    gint           i;
+    g_autoptr(GError) error = NULL;
+    gsize             offset = 0;
+    gsize             init_offset;
+    guint16           error_status;
+    guint16           error_code;
+    QmiClientInfo     info;
+    gint              i;
 
     g_assert_cmpuint (qmi_message_get_service (message), ==, QMI_SERVICE_CTL);
     g_assert (qmi_message_is_response (message));
@@ -608,22 +609,40 @@ track_cid (Client     *client,
         !qmi_message_tlv_read_guint16 (message, init_offset, &offset, QMI_ENDIAN_LITTLE, &error_status, &error) ||
         !qmi_message_tlv_read_guint16 (message, init_offset, &offset, QMI_ENDIAN_LITTLE, &error_code, &error)) {
         g_warning ("invalid 'CTL allocate CID' response: missing or invalid result TLV: %s", error->message);
-        g_error_free (error);
         return;
     }
-    g_warn_if_fail (__qmi_message_tlv_read_remaining_size (message, init_offset, offset) == 0);
+    g_warn_if_fail (qmi_message_tlv_read_remaining_size (message, init_offset, offset) == 0);
     if ((error_status != 0x00) || (error_code != QMI_PROTOCOL_ERROR_NONE))
         return;
 
     offset = 0;
-    if (((init_offset = qmi_message_tlv_read_init (message, QMI_MESSAGE_OUTPUT_TLV_ALLOCATION_INFO, NULL, &error)) == 0) ||
-        !qmi_message_tlv_read_guint8 (message, init_offset, &offset, &service_tmp, &error) ||
-        !qmi_message_tlv_read_guint8 (message, init_offset, &offset, &(info.cid), &error)) {
-        g_warning ("invalid 'CTL allocate CID' response: missing or invalid allocation info TLV: %s", error->message);
-        g_error_free (error);
+    if ((init_offset = qmi_message_tlv_read_init (message, QMI_MESSAGE_OUTPUT_TLV_ALLOCATION_INFO, NULL, &error)) == 0) {
+        g_warning ("invalid 'CTL allocate CID' response: missing allocation info TLV: %s", error->message);
         return;
     }
-    info.service = (QmiService)service_tmp;
+
+    if (qmi_message_get_message_id (message) == QMI_MESSAGE_CTL_ALLOCATE_CID) {
+        guint8 service_tmp;
+
+        if (!qmi_message_tlv_read_guint8 (message, init_offset, &offset, &service_tmp, &error)) {
+            g_warning ("invalid 'CTL allocate CID' request: failed to read service: %s", error->message);
+            return;
+        }
+        info.service = (QmiService)service_tmp;
+    } else if (qmi_message_get_message_id (message) == QMI_MESSAGE_CTL_INTERNAL_ALLOCATE_CID_QRTR) {
+        guint16 service_tmp;
+
+        if (!qmi_message_tlv_read_guint16 (message, init_offset, &offset, QMI_ENDIAN_LITTLE, &service_tmp, &error)) {
+            g_warning ("invalid 'CTL allocate CID QRTR' request: failed to read service: %s", error->message);
+            return;
+        }
+        info.service = (QmiService)service_tmp;
+    }
+
+    if (!qmi_message_tlv_read_guint8 (message, init_offset, &offset, &(info.cid), &error)) {
+        g_warning ("invalid 'CTL allocate CID' request: failed to read client id: %s", error->message);
+        return;
+    }
 
     /* Check if it already exists */
     i = qmi_client_info_array_lookup_cid (client->qmi_client_info_array, info.service, info.cid);
@@ -641,24 +660,43 @@ untrack_cid (QmiProxy   *self,
              Client     *client,
              QmiMessage *message)
 {
-    gsize          offset = 0;
-    gsize          init_offset;
-    GError        *error = NULL;
-    guint8         service_tmp;
-    QmiClientInfo  info;
-    gint           i;
+    g_autoptr(GError) error = NULL;
+    gsize             offset = 0;
+    gsize             init_offset;
+    QmiClientInfo     info;
+    gint              i;
 
     g_assert_cmpuint (qmi_message_get_service (message), ==, QMI_SERVICE_CTL);
     g_assert (qmi_message_is_request (message));
 
-    if (((init_offset = qmi_message_tlv_read_init (message, QMI_MESSAGE_INPUT_TLV_RELEASE_INFO, NULL, &error)) == 0) ||
-        !qmi_message_tlv_read_guint8 (message, init_offset, &offset, &service_tmp, &error) ||
-        !qmi_message_tlv_read_guint8 (message, init_offset, &offset, &(info.cid), &error)) {
-        g_warning ("invalid 'CTL release CID' request: missing or invalid release info TLV: %s", error->message);
-        g_error_free (error);
+    if ((init_offset = qmi_message_tlv_read_init (message, QMI_MESSAGE_INPUT_TLV_RELEASE_INFO, NULL, &error)) == 0) {
+        g_warning ("invalid 'CTL release CID' request: missing release info TLV: %s", error->message);
         return;
     }
-    info.service = (QmiService)service_tmp;
+
+    if (qmi_message_get_message_id (message) == QMI_MESSAGE_CTL_RELEASE_CID) {
+        guint8 service_tmp;
+
+        if (!qmi_message_tlv_read_guint8 (message, init_offset, &offset, &service_tmp, &error)) {
+            g_warning ("invalid 'CTL release CID' request: failed to read service: %s", error->message);
+            return;
+        }
+        info.service = (QmiService)service_tmp;
+    } else if (qmi_message_get_message_id (message) == QMI_MESSAGE_CTL_INTERNAL_RELEASE_CID_QRTR) {
+        guint16 service_tmp;
+
+        if (!qmi_message_tlv_read_guint16 (message, init_offset, &offset, QMI_ENDIAN_LITTLE, &service_tmp, &error)) {
+            g_warning ("invalid 'CTL release CID QRTR' request: failed to read service: %s", error->message);
+            return;
+        }
+        info.service = (QmiService)service_tmp;
+    } else
+        g_assert_not_reached ();
+
+    if (!qmi_message_tlv_read_guint8 (message, init_offset, &offset, &(info.cid), &error)) {
+        g_warning ("invalid 'CTL release CID' request: failed to read client id: %s", error->message);
+        return;
+    }
 
     /* Check if it already exists in the client */
     i = qmi_client_info_array_lookup_cid (client->qmi_client_info_array, info.service, info.cid);
@@ -730,10 +768,81 @@ track_implicit_cid (QmiProxy   *self,
     g_array_append_val (client->qmi_client_info_array, info);
 }
 
+/*****************************************************************************/
+
+#define TRACK_CTL_QUARK_STR "track-ctl-data"
+static GQuark track_ctl_quark;
+
+static void
+device_track_ctl_request (QmiDevice *device)
+{
+    guint ongoing_ctl;
+
+    if (G_UNLIKELY (!track_ctl_quark)) {
+        track_ctl_quark = g_quark_from_static_string (TRACK_CTL_QUARK_STR);
+        ongoing_ctl = 0;
+    } else
+        ongoing_ctl = GPOINTER_TO_UINT (g_object_get_qdata (G_OBJECT (device), track_ctl_quark));
+    g_object_set_qdata (G_OBJECT (device), track_ctl_quark, GUINT_TO_POINTER (ongoing_ctl + 1));
+}
+
+static void
+device_untrack_ctl_request (QmiDevice *device)
+{
+    guint ongoing_ctl;
+
+    g_assert (track_ctl_quark != 0);
+    ongoing_ctl = GPOINTER_TO_UINT (g_object_get_qdata (G_OBJECT (device), track_ctl_quark));
+    g_assert_cmpuint (ongoing_ctl, >, 0);
+    g_object_set_qdata (G_OBJECT (device), track_ctl_quark, GUINT_TO_POINTER (ongoing_ctl - 1));
+}
+
+static void
+device_close_if_unused (QmiProxy  *self,
+                        QmiDevice *device)
+{
+    GList *l;
+
+    /* If there is at least one client using the device,
+     * no need to close */
+    for (l = self->priv->clients; l; l = g_list_next (l)) {
+        Client *client = l->data;
+
+        if (client->device &&
+            (device == client->device ||
+             g_str_equal (qmi_device_get_path (device), qmi_device_get_path (client->device))))
+            return;
+    }
+
+    /* If there are no clients using the device BUT there
+     * are still ongoing CTL requests ongoing, no need to
+     * close */
+    if (GPOINTER_TO_UINT (g_object_get_qdata (G_OBJECT (device), track_ctl_quark)) > 0)
+        return;
+
+    /* Now, untrack device from proxy and close it */
+    for (l = self->priv->devices; l; l = g_list_next (l)) {
+        QmiDevice *device_in_list = QMI_DEVICE (l->data);
+
+        if (device_in_list &&
+            (device == device_in_list ||
+             g_str_equal (qmi_device_get_path (device), qmi_device_get_path (device_in_list)))) {
+            g_debug ("closing device '%s': no longer used", qmi_device_get_path_display (device));
+            qmi_device_close_async (device_in_list, 0, NULL, NULL, NULL);
+            g_object_unref (device_in_list);
+            self->priv->devices = g_list_remove (self->priv->devices, device_in_list);
+            return;
+        }
+    }
+}
+
+/*****************************************************************************/
+
 typedef struct {
     QmiProxy *self;   /* Full ref */
     Client   *client; /* Full ref */
     guint8    in_trid;
+    gboolean  ctl;
 } Request;
 
 static void
@@ -747,24 +856,23 @@ request_free (Request *request)
 }
 
 static void
-device_command_ready (QmiDevice *device,
+device_command_ready (QmiDevice    *device,
                       GAsyncResult *res,
-                      Request *request)
+                      Request      *request)
 {
-    QmiMessage *response;
-    GError *error = NULL;
+    g_autoptr(QmiMessage) response = NULL;
+    g_autoptr(GError)     error = NULL;
 
     response = qmi_device_command_full_finish (device, res, &error);
     if (!response) {
         g_warning ("sending request to device failed: %s", error->message);
-        g_error_free (error);
-        request_free (request);
-        return;
+        goto out;
     }
 
     if (qmi_message_get_service (response) == QMI_SERVICE_CTL) {
         qmi_message_set_transaction_id (response, request->in_trid);
-        if (qmi_message_get_message_id (response) == QMI_MESSAGE_CTL_ALLOCATE_CID)
+        if (qmi_message_get_message_id (response) == QMI_MESSAGE_CTL_ALLOCATE_CID ||
+            qmi_message_get_message_id (response) == QMI_MESSAGE_CTL_INTERNAL_ALLOCATE_CID_QRTR)
             track_cid (request->client, response);
     }
 
@@ -776,7 +884,11 @@ device_command_ready (QmiDevice *device,
         untrack_client (request->self, request->client);
     }
 
-    qmi_message_unref (response);
+ out:
+    if (request->ctl) {
+        device_untrack_ctl_request (device);
+        device_close_if_unused (request->self, device);
+    }
     request_free (request);
 }
 
@@ -802,11 +914,15 @@ process_message (QmiProxy   *self,
     request->client = client_ref (client);
 
     if (qmi_message_get_service (message) == QMI_SERVICE_CTL) {
+        /* Keep track of how many CTL requests are ongoing */
+        device_track_ctl_request (client->device);
+        request->ctl = TRUE;
         request->in_trid = qmi_message_get_transaction_id (message);
         qmi_message_set_transaction_id (message, 0);
         /* Try to untrack QMI client as soon as we detect the associated
          * release message, no need to wait for the response. */
-        if (qmi_message_get_message_id (message) == QMI_MESSAGE_CTL_RELEASE_CID)
+        if (qmi_message_get_message_id (message) == QMI_MESSAGE_CTL_RELEASE_CID ||
+            qmi_message_get_message_id (message) == QMI_MESSAGE_CTL_INTERNAL_RELEASE_CID_QRTR)
             untrack_cid (self, client, message);
     } else
         track_implicit_cid (self, client, message);
@@ -843,7 +959,8 @@ parse_request (QmiProxy *self,
          * If we broke framing, an error should be reported and the device
          * should get closed */
         if (client->buffer->len > 0 &&
-            client->buffer->data[0] != QMI_MESSAGE_QMUX_MARKER) {
+            client->buffer->data[0] != QMI_MESSAGE_QMUX_MARKER &&
+            client->buffer->data[0] != QMI_MESSAGE_QRTR_MARKER) {
             /* TODO: Report fatal error */
             g_warning ("QMI framing error detected");
             return;
@@ -868,15 +985,17 @@ parse_request (QmiProxy *self,
 }
 
 static gboolean
-connection_readable_cb (GSocket *socket,
-                        GIOCondition condition,
-                        Client *client)
+connection_readable_cb (GSocket      *socket,
+                        GIOCondition  condition,
+                        Client       *_client)
 {
-    QmiProxy *self;
-    guint8 buffer[BUFFER_SIZE];
-    GError *error = NULL;
-    gssize r;
+    g_autoptr(Client)  client = NULL;
+    QmiProxy          *self;
+    guint8             buffer[BUFFER_SIZE];
+    GError            *error = NULL;
+    gssize             r;
 
+    client = client_ref (_client);
     self = client->proxy;
 
     if (condition & G_IO_IN || condition & G_IO_PRI) {
@@ -938,7 +1057,7 @@ incoming_cb (GSocketService *service,
         g_error_free (error);
         return;
     }
-    if (!__qmi_user_allowed (uid, &error)) {
+    if (!qmi_helpers_check_user_allowed (uid, &error)) {
         g_warning ("Client not allowed: %s", error->message);
         g_error_free (error);
         return;
@@ -1021,7 +1140,7 @@ qmi_proxy_new (GError **error)
 {
     QmiProxy *self;
 
-    if (!__qmi_user_allowed (getuid (), error))
+    if (!qmi_helpers_check_user_allowed (getuid (), error))
         return NULL;
 
     self = g_object_new (QMI_TYPE_PROXY, NULL);
@@ -1072,6 +1191,10 @@ dispose (GObject *object)
         g_unlink (QMI_PROXY_SOCKET_PATH);
         g_debug ("UNIX socket service at '%s' stopped", QMI_PROXY_SOCKET_PATH);
     }
+
+#if QMI_QRTR_SUPPORTED
+    g_clear_object (&priv->qrtr_bus);
+#endif
 
     G_OBJECT_CLASS (qmi_proxy_parent_class)->dispose (object);
 }

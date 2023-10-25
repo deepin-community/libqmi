@@ -1,1 +1,1 @@
-versioned_python_binary.patch
+0001-libqmi-glib-message-fix-16-bit-service-on-big-endian.patch

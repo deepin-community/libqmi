@@ -15,7 +15,8 @@
 # Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 # Copyright (C) 2012 Lanedo GmbH
-# Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>
+# Copyright (C) 2012-2022 Aleksander Morgado <aleksander@aleksander.es>
+# Copyright (c) 2022 Qualcomm Innovation Center, Inc.
 #
 
 import string
@@ -25,112 +26,238 @@ import VariableFactory
 
 """
 Variable type for Structs ('struct' format)
+These variables are exclusively used as array elements, they can not be used as
+independent TLVs. Use Sequence instead for that.
 """
 class VariableStruct(Variable):
 
-    """
-    Constructor
-    """
-    def __init__(self, dictionary, struct_type_name, container_type):
+    def __init__(self, service, dictionary, struct_type_name, container_type):
 
         # Call the parent constructor
-        Variable.__init__(self, dictionary)
+        Variable.__init__(self, service, dictionary)
+
+        self.container_type = container_type
 
         # The public format of the struct is built directly from the suggested
         # struct type name
-        self.public_format = utils.build_camelcase_name(struct_type_name)
+        self.struct_type_name = struct_type_name
+        self.element_type = utils.build_camelcase_name(self.struct_type_name)
+        self.public_format = self.element_type
         self.private_format = self.public_format
-        self.element_type = self.public_format
-        self.container_type = container_type
+
+        self.since = dictionary['since'] if 'since' in dictionary else ''
 
         # Load members of this struct
         self.members = []
         for member_dictionary in dictionary['contents']:
             member = {}
             member['name'] = utils.build_underscore_name(member_dictionary['name'])
-            member['object'] = VariableFactory.create_variable(member_dictionary, struct_type_name + ' ' + member['name'], self.container_type)
+            member['object'] = VariableFactory.create_variable(self.service, member_dictionary, struct_type_name + ' ' + member['name'], self.container_type)
             # Specify that the variable will be defined in the public header
             member['object'].flag_public()
             self.members.append(member)
 
         # We'll need to dispose if at least one of the members needs it
         for member in self.members:
-            if member['object'].needs_dispose == True:
+            if member['object'].needs_dispose:
                 self.needs_dispose = True
+                break
+
+        if self.needs_dispose:
+            self.clear_method = '__' + utils.build_underscore_name(self.struct_type_name) + '_clear'
 
 
-    """
-    Emit all types for the members of the struct plus the new struct type itself
-    """
-    def emit_types(self, f, since, static):
-        # Emit types for each member
+        # When using structs, we always require GIR compat methods because they're going
+        # to be stored via reference pointers in the arrays
+        self.needs_compat_gir = True
+
+        # If any of the contents needs GIR compat methods, then we must also create a new
+        # GIR compat struct type; otherwise just use the original one
+        self.content_needs_compat_gir = False
         for member in self.members:
-            member['object'].emit_types(f, since, static)
+            if member['object'].needs_compat_gir:
+                self.content_needs_compat_gir = True
+                break
+
+        if self.content_needs_compat_gir:
+            self.struct_type_name_gir = self.struct_type_name + ' Gir'
+        else:
+            self.struct_type_name_gir = self.struct_type_name
+        self.element_type_gir = utils.build_camelcase_name(self.struct_type_name_gir)
+        self.public_format_gir = self.element_type_gir
+        self.private_format_gir = self.public_format_gir
+        self.new_method_gir = '__' + utils.build_underscore_name(self.struct_type_name_gir) + '_new'
+        self.free_method_gir = '__' + utils.build_underscore_name(self.struct_type_name_gir) + '_free'
+
+        # We'll contain personal info if at least one of the members contains personal info or we ourselves are personal info
+        if not self.contains_personal_info:
+            for member in self.members:
+                if member['object'].contains_personal_info:
+                    self.contains_personal_info = True
+                    break
+
+
+    def build_variable_declaration(self, line_prefix, variable_name):
+        raise RuntimeError('Variable of type "struct" can only be defined as array members')
+
+
+    def build_struct_field_declaration(self, line_prefix, variable_name):
+        raise RuntimeError('Variable of type "struct" cannot be defined as struct fields')
+
+
+    def emit_types(self, hfile, cfile, since, static):
+        for member in self.members:
+            member['object'].emit_types(hfile, cfile, since, static)
 
         translations = { 'format' : self.public_format,
-                         'since'  : since }
+                         'since'  : since if not self.since else self.since }
         template = '\n'
-        f.write(string.Template(template).substitute(translations))
+        hfile.write(string.Template(template).substitute(translations))
 
-        if static == False:
+        if not static and self.service != 'CTL':
             template = (
                 '\n'
-                '/**\n'
-                ' * ${format}:\n')
-            f.write(string.Template(template).substitute(translations))
+                '/**\n')
+            if self.content_needs_compat_gir:
+                template += (
+                    ' * ${format}: (skip)\n')
+            else:
+                template += (
+                    ' * ${format}:\n')
+            hfile.write(string.Template(template).substitute(translations))
             for member in self.members:
-                f.write(member['object'].build_struct_field_documentation(' * ', member['name']))
+                hfile.write(member['object'].build_struct_field_documentation(' * ', member['name']))
             template = (
                 ' *\n'
                 ' * A ${format} struct.\n'
                 ' *\n'
                 ' * Since: ${since}\n'
                 ' */\n')
-            f.write(string.Template(template).substitute(translations))
+            hfile.write(string.Template(template).substitute(translations))
 
         template = (
             'typedef struct _${format} {\n')
-        f.write(string.Template(template).substitute(translations))
+        hfile.write(string.Template(template).substitute(translations))
 
         for member in self.members:
-            f.write(member['object'].build_variable_declaration(True, '    ', member['name']))
+            hfile.write(member['object'].build_struct_field_declaration('    ', member['name']))
 
         template = ('} ${format};\n')
-        f.write(string.Template(template).substitute(translations))
+        hfile.write(string.Template(template).substitute(translations))
+
+        # No need for the clear func if no need to dispose the contents
+        if self.needs_dispose:
+            translations['clear_method'] = self.clear_method
+            template = (
+                '\n'
+                'static void\n'
+                '${clear_method} (${format} *value)\n'
+                '{\n')
+            for member in self.members:
+                template += member['object'].build_dispose('    ', 'value->' + member['name'])
+            template += (
+                '}\n')
+            cfile.write(string.Template(template).substitute(translations))
 
 
-    """
-    Emit helper methods for all types in the struct
-    """
-    def emit_helper_methods(self, hfile, cfile):
-        # Emit for each member
+    def emit_types_gir(self, hfile, cfile, since):
         for member in self.members:
-            member['object'].emit_helper_methods(hfile, cfile)
+            member['object'].emit_types_gir(hfile, cfile, since)
+
+        translations = { 'element_type_no_gir' : self.public_format,
+                         'element_type'        : self.element_type_gir,
+                         'underscore'          : utils.build_underscore_name(self.struct_type_name_gir),
+                         'new_method'          : self.new_method_gir,
+                         'free_method'         : self.free_method_gir,
+                         'since'               : since if utils.version_compare('1.32',since) > 0 else '1.32' }
+
+        # The type emission should happen ONLY if the GIR required type is
+        # different to the original one
+        if self.content_needs_compat_gir:
+            template = (
+                '\n'
+                '/**\n'
+                ' * ${element_type}: (rename-to ${element_type_no_gir})\n')
+            hfile.write(string.Template(template).substitute(translations))
+            for member in self.members:
+                hfile.write(member['object'].build_struct_field_documentation_gir(' * ', member['name']))
+            template = (
+                ' *\n'
+                ' * A ${element_type} struct.\n'
+                ' *\n'
+                ' * This type is a version of #${element_type_no_gir}, using arrays of pointers to\n'
+                ' * structs instead of arrays of structs, for easier binding in other languages.\n'
+                ' *\n'
+                ' * Since: ${since}\n'
+                ' */\n')
+            hfile.write(string.Template(template).substitute(translations))
+
+            template = (
+                'typedef struct _${element_type} {\n')
+            hfile.write(string.Template(template).substitute(translations))
+            for member in self.members:
+                hfile.write(member['object'].build_struct_field_declaration_gir('    ', member['name']))
+                template = (
+                    '} ${element_type};\n')
+            hfile.write(string.Template(template).substitute(translations))
+
+        # Free and New methods are required always for the GIR required type,
+        # regardless of whether it's different to the original one or the same
+        template = (
+            '\n'
+            'static void\n'
+            '${free_method} (${element_type} *value)\n'
+            '{\n')
+        if not self.content_needs_compat_gir and self.needs_dispose:
+            translations['clear_method'] = self.clear_method
+            template += '    ${clear_method} (value);\n'
+        else:
+            for member in self.members:
+                template += member['object'].build_dispose_gir('    ', 'value->' + member['name'])
+        template += (
+            '    g_slice_free (${element_type}, value);\n'
+            '}\n'
+            '\n'
+            'static ${element_type} *\n'
+            '${new_method} (void)\n'
+            '{\n'
+            '    return g_slice_new0 (${element_type});\n'
+            '}\n')
+        cfile.write(string.Template(template).substitute(translations))
+
+        template = (
+            '\n'
+            'GType ${underscore}_get_type (void) G_GNUC_CONST;\n')
+        hfile.write(string.Template(template).substitute(translations))
+
+        template = (
+            '\n'
+            'static ${element_type} *\n'
+            '__${underscore}_copy (const ${element_type} *value)\n'
+            '{\n'
+            '    ${element_type} *copy;\n'
+            '\n'
+            '    copy = ${new_method} ();\n')
+        template += self.build_copy_gir('    ', 'value', 'copy')
+        template += (
+            '    return copy;\n'
+            '}\n'
+            '\n'
+            'G_DEFINE_BOXED_TYPE (${element_type}, ${underscore}, (GBoxedCopyFunc)__${underscore}_copy, (GBoxedFreeFunc)__${underscore}_free)\n')
+        cfile.write(string.Template(template).substitute(translations))
 
 
-    """
-    Reading the contents of a struct is just about reading each of the struct
-    fields one by one.
-    """
     def emit_buffer_read(self, f, line_prefix, tlv_out, error, variable_name):
         for member in self.members:
             member['object'].emit_buffer_read(f, line_prefix, tlv_out, error, variable_name + '.' +  member['name'])
 
 
-    """
-    Writing the contents of a struct is just about writing each of the struct
-    fields one by one.
-    """
     def emit_buffer_write(self, f, line_prefix, tlv_name, variable_name):
         for member in self.members:
             member['object'].emit_buffer_write(f, line_prefix, tlv_name, variable_name + '.' +  member['name'])
 
 
-    """
-    The struct will be printed as a list of fields enclosed between square
-    brackets
-    """
-    def emit_get_printable(self, f, line_prefix):
+    def emit_get_printable(self, f, line_prefix, is_personal):
         translations = { 'lp' : line_prefix }
 
         template = (
@@ -143,7 +270,7 @@ class VariableStruct(Variable):
                 '${lp}g_string_append (printable, " ${variable_name} = \'");\n')
             f.write(string.Template(template).substitute(translations))
 
-            member['object'].emit_get_printable(f, line_prefix)
+            member['object'].emit_get_printable(f, line_prefix, self.personal_info or is_personal)
 
             template = (
                 '${lp}g_string_append (printable, "\'");\n')
@@ -154,151 +281,72 @@ class VariableStruct(Variable):
         f.write(string.Template(template).substitute(translations))
 
 
-    """
-    Variable declaration
-    """
-    def build_variable_declaration(self, public, line_prefix, variable_name):
-        translations = { 'lp'     : line_prefix,
-                         'format' : self.public_format,
-                         'name'   : variable_name }
-
-        template = (
-            '${lp}${format} ${name};\n')
-        return string.Template(template).substitute(translations)
-
-
-    """
-    The getter for a struct variable will include independent getters for each
-    of the variables in the struct.
-    """
-    def build_getter_declaration(self, line_prefix, variable_name):
-        if not self.visible:
-            return ""
-
-        translations = { 'lp'     : line_prefix,
-                         'format' : self.public_format,
-                         'name'   : variable_name }
-
-        template = (
-            '${lp}${format} *${name},\n')
-        return string.Template(template).substitute(translations)
-
-
-    """
-    Documentation for the getter
-    """
-    def build_getter_documentation(self, line_prefix, variable_name):
-        if not self.visible:
-            return ""
-
-        translations = { 'lp'     : line_prefix,
-                         'format' : self.public_format,
-                         'name'   : variable_name }
-
-        template = (
-            '${lp}@${name}: (out): a placeholder for the output constant #${format}, or %NULL if not required.\n')
-        return string.Template(template).substitute(translations)
-
-
-    """
-    Builds the Struct getter implementation
-    """
-    def build_getter_implementation(self, line_prefix, variable_name_from, variable_name_to, to_is_reference):
-        if not self.visible:
-            return ""
-
-        translations = { 'lp'   : line_prefix,
-                         'from' : variable_name_from,
-                         'to'   : variable_name_to }
-
-        if to_is_reference:
-            template = (
-                '${lp}if (${to})\n'
-                '${lp}    *${to} = ${from};\n')
-            return string.Template(template).substitute(translations)
-        else:
-            template = (
-                '${lp}${to} = ${from};\n')
-            return string.Template(template).substitute(translations)
-
-
-    """
-    The setter for a struct variable will include independent setters for each
-    of the variables in the struct.
-    """
-    def build_setter_declaration(self, line_prefix, variable_name):
-        if not self.visible:
-            return ""
-
-        translations = { 'lp'     : line_prefix,
-                         'format' : self.public_format,
-                         'name'   : variable_name }
-
-        template = (
-            '${lp}const ${format} *${name},\n')
-        return string.Template(template).substitute(translations)
-
-
-    """
-    Documentation for the setter
-    """
-    def build_setter_documentation(self, line_prefix, variable_name):
-        if not self.visible:
-            return ""
-
-        translations = { 'lp'     : line_prefix,
-                         'format' : self.public_format,
-                         'name'   : variable_name }
-
-        template = (
-            '${lp}@${name}: the address of the #${format} to set.\n')
-        return string.Template(template).substitute(translations)
-
-    """
-    Builds the Struct setter implementation
-    """
-    def build_setter_implementation(self, line_prefix, variable_name_from, variable_name_to):
-        if not self.visible:
-            return ""
-
-        built = ''
-        for member in self.members:
-            built += member['object'].build_setter_implementation(line_prefix,
-                                                                  variable_name_from + '->' + member['name'],
-                                                                  variable_name_to + '.' + member['name'])
-        return built
-
-
-    """
-    Documentation for the struct field
-    """
-    def build_struct_field_documentation(self, line_prefix, variable_name):
-        translations = { 'lp'     : line_prefix,
-                         'format' : self.public_format,
-                         'name'   : variable_name }
-
-        template = (
-            '${lp}@${name}: a #${format} struct.\n')
-        return string.Template(template).substitute(translations)
-
-
-    """
-    Disposing a struct is just about disposing each of the struct fields one by
-    one.
-    """
     def build_dispose(self, line_prefix, variable_name):
-        built = ''
+        translations = { 'lp'            : line_prefix,
+                         'underscore'    : utils.build_underscore_name(self.struct_type_name),
+                         'variable_name' : variable_name }
+
+        template = '${lp}${underscore}_clear (&${variable_name});\n'
+        return string.Template(template).substitute(translations)
+
+
+    def build_dispose_gir(self, line_prefix, variable_name):
+        translations = { 'lp'            : line_prefix,
+                         'underscore'    : utils.build_underscore_name(self.struct_type_name_gir),
+                         'variable_name' : variable_name }
+
+        template = '${lp}${underscore}_free (${variable_name});\n'
+        return string.Template(template).substitute(translations)
+
+
+    def build_copy_to_gir(self, line_prefix, variable_name_from, variable_name_to):
+        translations = { 'lp'                 : line_prefix,
+                         'element_type_gir'   : self.element_type_gir,
+                         'variable_name_to'   : variable_name_to,
+                         'variable_name_from' : variable_name_from }
+
+        template = ''
         for member in self.members:
-            built += member['object'].build_dispose(line_prefix, variable_name + '.' + member['name'])
-        return built
+            template += member['object'].build_copy_to_gir(line_prefix,
+                                                           '${variable_name_from}.' + member['name'],
+                                                           '${variable_name_to}->' + member['name'])
+        return string.Template(template).substitute(translations)
 
 
-    """
-    Add sections
-    """
+    def build_copy_from_gir(self, line_prefix, variable_name_from, variable_name_to):
+        translations = { 'lp'                 : line_prefix,
+                         'element_type_gir'   : self.element_type_gir,
+                         'variable_name_to'   : variable_name_to,
+                         'variable_name_from' : variable_name_from }
+
+        template = ''
+        for member in self.members:
+            template += member['object'].build_copy_from_gir(line_prefix,
+                                                             '${variable_name_from}->' + member['name'],
+                                                             '${variable_name_to}.' + member['name'])
+        return string.Template(template).substitute(translations)
+
+
+    def build_copy_gir(self, line_prefix, variable_name_from, variable_name_to):
+        translations = { 'lp'                 : line_prefix,
+                         'element_type_gir'   : self.element_type_gir,
+                         'variable_name_to'   : variable_name_to,
+                         'variable_name_from' : variable_name_from }
+
+        template = ''
+        for member in self.members:
+            template += member['object'].build_copy_gir(line_prefix,
+                                                        '${variable_name_from}->' + member['name'],
+                                                        '${variable_name_to}->' + member['name'])
+        return string.Template(template).substitute(translations)
+
+
     def add_sections(self, sections):
-        # Add sections for each member
         for member in self.members:
             member['object'].add_sections(sections)
 
-        sections['public-types'] += self.public_format + '\n'
+        sections['public-types'] += self.element_type + '\n'
+        sections['standard'] += utils.build_underscore_name(self.struct_type_name) + '_get_type\n'
+        if self.content_needs_compat_gir:
+            sections['public-types'] += self.element_type_gir + '\n'
+            sections['standard'] += utils.build_underscore_name(self.struct_type_name_gir) + '_get_type\n'

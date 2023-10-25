@@ -23,7 +23,7 @@
  * Copyright (C) 1999,2000 Erik Walthinsen <omega@cse.ogi.edu>
  * Copyright (C) 2000 Wim Taymans <wtay@chello.be>
  * Copyright (C) 2002 Thomas Vander Stichele <thomas@apestaart.org>
-
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc.
  */
 
 #ifndef _LIBQMI_GLIB_QMI_UTILS_H_
@@ -38,18 +38,13 @@
 G_BEGIN_DECLS
 
 /**
- * QmiEndian:
- * @QMI_ENDIAN_LITTLE: Little endian.
- * @QMI_ENDIAN_BIG: Big endian.
+ * SECTION: qmi-utils
+ * @title: Common utilities
+ * @short_description: Common utilities in the library.
  *
- * Type of endianness
- *
- * Since: 1.0
+ * This section exposes a set of common utilities that may be used to work
+ * with the QMI library.
  */
-typedef enum {
-    QMI_ENDIAN_LITTLE = 0,
-    QMI_ENDIAN_BIG    = 1
-} QmiEndian;
 
 /* Enabling/Disabling traces */
 
@@ -73,6 +68,27 @@ gboolean qmi_utils_get_traces_enabled (void);
  * Since: 1.0
  */
 void qmi_utils_set_traces_enabled (gboolean enabled);
+
+/**
+ * qmi_utils_set_show_personal_info:
+ * @show_personal_info: %TRUE to show personal info in traces, %FALSE otherwise.
+ *
+ * Sets whether personal info is printed when traces are enabled.
+ *
+ * Since: 1.32
+ */
+void qmi_utils_set_show_personal_info (gboolean show_personal_info);
+
+/**
+ * qmi_utils_get_show_personal_info:
+ *
+ * Checks whether personal info should be hidden when traces are enabled.
+ *
+ * Returns: %TRUE to show personal info in trace, %FALSE otherwise.
+ *
+ * Since: 1.32
+ */
+gboolean qmi_utils_get_show_personal_info (void);
 
 G_END_DECLS
 

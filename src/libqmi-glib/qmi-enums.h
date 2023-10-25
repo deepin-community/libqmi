@@ -30,6 +30,8 @@
 
 /**
  * SECTION: qmi-enums
+ * @title: Common enumerations and flags
+ * @short_description: Common enumerations and flags in the library.
  *
  * This section defines common enumerations and flags used in the interface.
  */
@@ -54,7 +56,7 @@
  * @QMI_SERVICE_RMTFS: Remote file system service.
  * @QMI_SERVICE_TEST: Test service. Since: 1.8.
  * @QMI_SERVICE_LOC: Location service (~ PDS v2).
- * @QMI_SERVICE_SAR: Service access proxy service.
+ * @QMI_SERVICE_SAR: Specific absorption rate service.
  * @QMI_SERVICE_IMS: IMS settings service. Since: 1.8.
  * @QMI_SERVICE_ADC: Analog to digital converter driver service. Since: 1.8.
  * @QMI_SERVICE_CSD: Core sound driver service. Since: 1.8.
@@ -79,12 +81,16 @@
  * @QMI_SERVICE_RFRPE: RF radiated performance enhancement service. Since: 1.8.
  * @QMI_SERVICE_DSD: Data system determination service. Since: 1.8.
  * @QMI_SERVICE_SSCTL: Subsystem control service. Since: 1.8.
+ * @QMI_SERVICE_DPM: Data Port Mapper service. Since: 1.30.
  * @QMI_SERVICE_CAT: Card Application Toolkit service (v1).
  * @QMI_SERVICE_RMS: Remote Management Service.
  * @QMI_SERVICE_OMA: Open Mobile Alliance device management service.
+ * @QMI_SERVICE_FOX: Foxconn General Modem Service. Since: 1.32.
+ * @QMI_SERVICE_SSC: Snapdragon Sensore Core Service. Since: 1.34.
  * @QMI_SERVICE_FOTA: Firmware Over The Air service. Since: 1.24.
  * @QMI_SERVICE_GMS: Telit General Modem Service. Since: 1.24.
  * @QMI_SERVICE_GAS: Telit General Application Service. Since: 1.24.
+ * @QMI_SERVICE_ATR: Telit AT Relay Service. Since: 1.34.
  *
  * QMI services.
  *
@@ -136,26 +142,84 @@ typedef enum { /*< since=1.0 >*/
     QMI_SERVICE_RFRPE   = 0x29,
     QMI_SERVICE_DSD     = 0x2A,
     QMI_SERVICE_SSCTL   = 0x2B,
+    QMI_SERVICE_DPM     = 0x2F,
     QMI_SERVICE_CAT     = 0xE0,
     QMI_SERVICE_RMS     = 0xE1,
     QMI_SERVICE_OMA     = 0xE2,
+    QMI_SERVICE_FOX     = 0xE3,
     QMI_SERVICE_FOTA    = 0xE6,
     QMI_SERVICE_GMS     = 0xE7,
     QMI_SERVICE_GAS     = 0xE8,
+    QMI_SERVICE_ATR     = 0xED,
+    QMI_SERVICE_SSC     = 0x190,
 } QmiService;
 
 /**
+ * QmiEndian:
+ * @QMI_ENDIAN_LITTLE: Little endian.
+ * @QMI_ENDIAN_BIG: Big endian.
+ *
+ * Type of endianness.
+ *
+ * Since: 1.0
+ */
+typedef enum { /*< since=1.28 >*/   /* the get_string() helper and QmiEndian type added in 1.28 */
+    QMI_ENDIAN_LITTLE = 0,
+    QMI_ENDIAN_BIG    = 1
+} QmiEndian;
+
+/**
  * QmiDataEndpointType:
- * @QMI_DATA_ENDPOINT_TYPE_HSUSB: Data Endpoint Type HSUSB.
- * @QMI_DATA_ENDPOINT_TYPE_UNDEFINED: Data Endpoint Type undefined.
+ * @QMI_DATA_ENDPOINT_TYPE_UNKNOWN: Unknown. Since 1.30.
+ * @QMI_DATA_ENDPOINT_TYPE_HSIC: High-speed inter-chip interface. Since 1.30.
+ * @QMI_DATA_ENDPOINT_TYPE_HSUSB: High-speed USB.
+ * @QMI_DATA_ENDPOINT_TYPE_PCIE: PCIe. Since: 1.28.
+ * @QMI_DATA_ENDPOINT_TYPE_EMBEDDED: Embedded. Since 1.28.
+ * @QMI_DATA_ENDPOINT_TYPE_BAM_DMUX: BAM/DMUX. Since 1.30.
+ * @QMI_DATA_ENDPOINT_TYPE_UNDEFINED: Undefined.
  *
  * Data Endpoint Type.
  *
  * Since: 1.18
  */
 typedef enum { /*< since=1.18 >*/
-    QMI_DATA_ENDPOINT_TYPE_HSUSB     = 0X02,
-    QMI_DATA_ENDPOINT_TYPE_UNDEFINED = 0XFF,
+    QMI_DATA_ENDPOINT_TYPE_UNKNOWN   = 0x00,
+    QMI_DATA_ENDPOINT_TYPE_HSIC      = 0x01,
+    QMI_DATA_ENDPOINT_TYPE_HSUSB     = 0x02,
+    QMI_DATA_ENDPOINT_TYPE_PCIE      = 0x03,
+    QMI_DATA_ENDPOINT_TYPE_EMBEDDED  = 0x04,
+    QMI_DATA_ENDPOINT_TYPE_BAM_DMUX  = 0x05,
+    QMI_DATA_ENDPOINT_TYPE_UNDEFINED = 0xFF,
 } QmiDataEndpointType;
+
+/**
+ * QmiSioPort:
+ * @QMI_SIO_PORT_NONE: Invalid port number.
+ * @QMI_SIO_PORT_A2_MUX_RMNET0: A2 MUX (BAM-DMUX) port for rmnet0.
+ * @QMI_SIO_PORT_A2_MUX_RMNET1: A2 MUX (BAM-DMUX) port for rmnet1.
+ * @QMI_SIO_PORT_A2_MUX_RMNET2: A2 MUX (BAM-DMUX) port for rmnet2.
+ * @QMI_SIO_PORT_A2_MUX_RMNET3: A2 MUX (BAM-DMUX) port for rmnet3.
+ * @QMI_SIO_PORT_A2_MUX_RMNET4: A2 MUX (BAM-DMUX) port for rmnet4.
+ * @QMI_SIO_PORT_A2_MUX_RMNET5: A2 MUX (BAM-DMUX) port for rmnet5.
+ * @QMI_SIO_PORT_A2_MUX_RMNET6: A2 MUX (BAM-DMUX) port for rmnet6.
+ * @QMI_SIO_PORT_A2_MUX_RMNET7: A2 MUX (BAM-DMUX) port for rmnet7.
+ *
+ * SIO (serial I/O) port numbers. All ports available in the modem have a SIO
+ * port number. This enum is incomplete, only few port numbers are publicly
+ * known.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    QMI_SIO_PORT_NONE          = 0x0000,
+    QMI_SIO_PORT_A2_MUX_RMNET0 = 0x0e04,
+    QMI_SIO_PORT_A2_MUX_RMNET1 = 0x0e05,
+    QMI_SIO_PORT_A2_MUX_RMNET2 = 0x0e06,
+    QMI_SIO_PORT_A2_MUX_RMNET3 = 0x0e07,
+    QMI_SIO_PORT_A2_MUX_RMNET4 = 0x0e08,
+    QMI_SIO_PORT_A2_MUX_RMNET5 = 0x0e09,
+    QMI_SIO_PORT_A2_MUX_RMNET6 = 0x0e0a,
+    QMI_SIO_PORT_A2_MUX_RMNET7 = 0x0e0b,
+} QmiSioPort;
 
 #endif /* _LIBQMI_GLIB_QMI_ENUMS_H_ */

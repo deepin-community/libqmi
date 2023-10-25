@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc.
  */
 
 #include "config.h"
@@ -35,6 +36,9 @@
 
 #if defined HAVE_QMI_SERVICE_UIM
 
+#undef VALIDATE_MASK_NONE
+#define VALIDATE_MASK_NONE(str) (str ? str : "none")
+
 /* Context */
 typedef struct {
     QmiDevice *device;
@@ -43,8 +47,7 @@ typedef struct {
 
     /* For Slot Status indication */
     guint slot_status_indication_id;
-    gboolean warned_slot_ext_info_unavailable;
-    gboolean warned_slot_eid_info_unavailable;
+    guint refresh_indication_id;
 } Context;
 static Context *ctx;
 
@@ -60,12 +63,17 @@ static gchar *sim_power_on_str;
 static gchar *sim_power_off_str;
 static gchar *change_provisioning_session_str;
 static gchar *switch_slot_str;
+static gchar *depersonalization_str;
+static gchar *remote_unlock_str;
+static gchar **monitor_refresh_file_array;
 static gboolean get_card_status_flag;
 static gboolean get_supported_messages_flag;
 static gboolean get_slot_status_flag;
 static gboolean monitor_slot_status_flag;
 static gboolean reset_flag;
+static gboolean monitor_refresh_all_flag;
 static gboolean noop_flag;
+static gboolean get_configuration_flag;
 
 #undef VALIDATE_UNKNOWN
 #define VALIDATE_UNKNOWN(str) (str ? str : "unknown")
@@ -167,11 +175,41 @@ static GOptionEntry entries[] = {
       NULL
     },
 #endif
+#if defined HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER
+    { "uim-monitor-refresh-file", 0, 0, G_OPTION_ARG_STRING_ARRAY, &monitor_refresh_file_array,
+      "Watch for REFRESH events for given file paths",
+      "[0xNNNN,0xNNNN,...]"
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER_ALL
+    { "uim-monitor-refresh-all", 0, 0, G_OPTION_ARG_NONE, &monitor_refresh_all_flag,
+      "Watch for REFRESH events for any file",
+      NULL
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_UIM_GET_CONFIGURATION
+    { "uim-get-configuration", 0, 0, G_OPTION_ARG_NONE, &get_configuration_flag,
+      "Get personalization status of the modem",
+      NULL
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_UIM_DEPERSONALIZATION
+    { "uim-depersonalization", 0, 0, G_OPTION_ARG_STRING, &depersonalization_str,
+      "Deactivates or unblocks personalization feature",
+      "[(feature),(operation),(control key)[,(slot number)]]"
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_UIM_REMOTE_UNLOCK
+    { "uim-remote-unlock", 0, 0, G_OPTION_ARG_STRING, &remote_unlock_str,
+      "Updates the SimLock configuration data",
+      "[XX:XX:...]"
+    },
+#endif
     { "uim-noop", 0, 0, G_OPTION_ARG_NONE, &noop_flag,
       "Just allocate or release a UIM client. Use with `--client-no-release-cid' and/or `--client-cid'",
       NULL
     },
-    { NULL }
+    { NULL, 0, 0, 0, NULL, NULL, NULL }
 };
 
 GOptionGroup *
@@ -209,11 +247,16 @@ qmicli_uim_options_enabled (void)
                  !!sim_power_off_str +
                  !!change_provisioning_session_str +
                  !!switch_slot_str +
+                 !!monitor_refresh_file_array +
+                 !!depersonalization_str +
+                 !!remote_unlock_str +
                  get_card_status_flag +
                  get_supported_messages_flag +
                  get_slot_status_flag +
                  monitor_slot_status_flag +
                  reset_flag +
+                 monitor_refresh_all_flag +
+                 get_configuration_flag +
                  noop_flag);
 
     if (n_actions > 1) {
@@ -221,7 +264,7 @@ qmicli_uim_options_enabled (void)
         exit (EXIT_FAILURE);
     }
 
-    if (monitor_slot_status_flag)
+    if (monitor_slot_status_flag || monitor_refresh_file_array || monitor_refresh_all_flag)
         qmicli_expect_indications ();
 
     checked = TRUE;
@@ -237,6 +280,9 @@ context_free (Context *context)
     if (context->slot_status_indication_id)
         g_signal_handler_disconnect (context->client,
                                      context->slot_status_indication_id);
+    if (context->refresh_indication_id)
+        g_signal_handler_disconnect (context->client,
+                                     context->refresh_indication_id);
 
     if (context->client)
         g_object_unref (context->client);
@@ -273,9 +319,9 @@ set_pin_protection_input_create (const gchar *str)
         qmicli_read_enable_disable_from_string (split[1], &enable_disable) &&
         qmicli_read_non_empty_string (split[2], "current PIN", &current_pin)) {
         GError *error = NULL;
-        GArray *dummy_aid;
+        GArray *placeholder_aid;
 
-        dummy_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
+        placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
 
         input = qmi_message_uim_set_pin_protection_input_new ();
         if (!qmi_message_uim_set_pin_protection_input_set_info (
@@ -287,7 +333,7 @@ set_pin_protection_input_create (const gchar *str)
             !qmi_message_uim_set_pin_protection_input_set_session (
                 input,
                 QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
-                dummy_aid, /* ignored */
+                placeholder_aid, /* ignored */
                 &error)) {
             g_printerr ("error: couldn't create input data bundle: '%s'\n",
                         error->message);
@@ -295,7 +341,7 @@ set_pin_protection_input_create (const gchar *str)
             qmi_message_uim_set_pin_protection_input_unref (input);
             input = NULL;
         }
-        g_array_unref (dummy_aid);
+        g_array_unref (placeholder_aid);
     }
     g_strfreev (split);
 
@@ -369,9 +415,9 @@ verify_pin_input_create (const gchar *str)
     if (qmicli_read_uim_pin_id_from_string (split[0], &pin_id) &&
         qmicli_read_non_empty_string (split[1], "current PIN", &current_pin)) {
         GError *error = NULL;
-        GArray *dummy_aid;
+        GArray *placeholder_aid;
 
-        dummy_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
+        placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
 
         input = qmi_message_uim_verify_pin_input_new ();
         if (!qmi_message_uim_verify_pin_input_set_info (
@@ -382,7 +428,7 @@ verify_pin_input_create (const gchar *str)
             !qmi_message_uim_verify_pin_input_set_session (
                 input,
                 QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
-                dummy_aid, /* ignored */
+                placeholder_aid, /* ignored */
                 &error)) {
             g_printerr ("error: couldn't create input data bundle: '%s'\n",
                         error->message);
@@ -390,7 +436,7 @@ verify_pin_input_create (const gchar *str)
             qmi_message_uim_verify_pin_input_unref (input);
             input = NULL;
         }
-        g_array_unref (dummy_aid);
+        g_array_unref (placeholder_aid);
     }
     g_strfreev (split);
 
@@ -466,9 +512,9 @@ unblock_pin_input_create (const gchar *str)
         qmicli_read_non_empty_string (split[1], "PUK", &puk) &&
         qmicli_read_non_empty_string (split[2], "new PIN", &new_pin)) {
         GError *error = NULL;
-        GArray *dummy_aid;
+        GArray *placeholder_aid;
 
-        dummy_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
+        placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
 
         input = qmi_message_uim_unblock_pin_input_new ();
         if (!qmi_message_uim_unblock_pin_input_set_info (
@@ -480,7 +526,7 @@ unblock_pin_input_create (const gchar *str)
             !qmi_message_uim_unblock_pin_input_set_session (
                 input,
                 QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
-                dummy_aid, /* ignored */
+                placeholder_aid, /* ignored */
                 &error)) {
             g_printerr ("error: couldn't create input data bundle: '%s'\n",
                         error->message);
@@ -488,7 +534,7 @@ unblock_pin_input_create (const gchar *str)
             qmi_message_uim_unblock_pin_input_unref (input);
             input = NULL;
         }
-        g_array_unref (dummy_aid);
+        g_array_unref (placeholder_aid);
     }
     g_strfreev (split);
 
@@ -564,9 +610,9 @@ change_pin_input_create (const gchar *str)
         qmicli_read_non_empty_string (split[1], "old PIN", &old_pin) &&
         qmicli_read_non_empty_string (split[2], "new PIN", &new_pin)) {
         GError *error = NULL;
-        GArray *dummy_aid;
+        GArray *placeholder_aid;
 
-        dummy_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
+        placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
 
         input = qmi_message_uim_change_pin_input_new ();
         if (!qmi_message_uim_change_pin_input_set_info (
@@ -578,7 +624,7 @@ change_pin_input_create (const gchar *str)
             !qmi_message_uim_change_pin_input_set_session (
                 input,
                 QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
-                dummy_aid, /* ignored */
+                placeholder_aid, /* ignored */
                 &error)) {
             g_printerr ("error: couldn't create input data bundle: '%s'\n",
                         error->message);
@@ -586,7 +632,7 @@ change_pin_input_create (const gchar *str)
             qmi_message_uim_change_pin_input_unref (input);
             input = NULL;
         }
-        g_array_unref (dummy_aid);
+        g_array_unref (placeholder_aid);
     }
     g_strfreev (split);
 
@@ -1015,7 +1061,7 @@ print_slot_status (GArray *physical_slots,
     for (i = 0; i < physical_slots->len; i++) {
         QmiPhysicalSlotStatusSlot *slot_status;
         QmiPhysicalSlotInformationSlot *slot_info = NULL;
-        GArray *slot_eid = NULL;
+        QmiSlotEidElement *slot_eid = NULL;
         g_autofree gchar *iccid = NULL;
         g_autofree gchar *eid = NULL;
 
@@ -1051,9 +1097,9 @@ print_slot_status (GArray *physical_slots,
         if (!slot_info->is_euicc || !slot_eids)
             continue;
 
-        slot_eid = g_array_index (slot_eids, GArray *, i);
-        if (slot_eid->len)
-            eid = decode_eid (slot_eid->data, slot_eid->len);
+        slot_eid = &g_array_index (slot_eids, QmiSlotEidElement, i);
+        if (slot_eid->eid)
+            eid = decode_eid (slot_eid->eid->data, slot_eid->eid->len);
         g_print ("             EID: %s\n", VALIDATE_UNKNOWN (eid));
     }
 }
@@ -1100,19 +1146,9 @@ get_slot_status_ready (QmiClientUim *client,
         return;
     }
 
-    if (!qmi_message_uim_get_slot_status_output_get_physical_slot_information (
-            output, &ext_information, &error)) {
-        /* Recoverable, just print less information per slot */
-        g_print ("  Extended slots information is unavailable: %s\n", error->message);
-        g_clear_error (&error);
-    }
-
-    if (!qmi_message_uim_get_slot_status_output_get_slot_eid_information (
-          output, &slot_eids, &error)) {
-        /* Recoverable, just print less information per slot */
-        g_print ("  Slot EID information is unavailable: %s\n", error->message);
-        g_clear_error (&error);
-    }
+    /* Both of these are recoverable, just print less information per slot */
+    qmi_message_uim_get_slot_status_output_get_physical_slot_information (output, &ext_information, NULL);
+    qmi_message_uim_get_slot_status_output_get_slot_eid (output, &slot_eids, NULL);
 
     g_print ("[%s] %u physical slots found:\n",
              qmi_device_get_path_display (ctx->device), physical_slots->len);
@@ -1282,21 +1318,9 @@ slot_status_received (QmiClientUim *client,
         return;
     }
 
-    /* Both of these are recoverable, just print less information per slot. Only print
-     * these messages once rather than every time we get an indication */
-    if (!qmi_indication_uim_slot_status_output_get_physical_slot_information (
-          output, &ext_information, &error) && !ctx->warned_slot_ext_info_unavailable) {
-        g_print ("  Extended slots information is unavailable: %s\n", error->message);
-        ctx->warned_slot_ext_info_unavailable = TRUE;
-    }
-    g_clear_error (&error);
-
-    if (!qmi_indication_uim_slot_status_output_get_slot_eid_information (
-          output, &slot_eids, &error) && !ctx->warned_slot_eid_info_unavailable) {
-        g_print ("  Slot EID information is unavailable: %s\n", error->message);
-        ctx->warned_slot_eid_info_unavailable = TRUE;
-    }
-    g_clear_error (&error);
+    /* Both of these are recoverable, just print less information per slot */
+    qmi_indication_uim_slot_status_output_get_physical_slot_information (output, &ext_information, NULL);
+    qmi_indication_uim_slot_status_output_get_slot_eid (output, &slot_eids, NULL);
 
     print_slot_status (physical_slots, ext_information, slot_eids);
 }
@@ -1495,10 +1519,10 @@ get_card_status_ready (QmiClientUim *client,
                  card->upuk_retries);
 
         for (j = 0; j < card->applications->len; j++) {
-            QmiMessageUimGetCardStatusOutputCardStatusCardsElementApplicationsElement *app;
+            QmiMessageUimGetCardStatusOutputCardStatusCardsElementApplicationsElementV2 *app;
             gchar *str;
 
-            app = &g_array_index (card->applications, QmiMessageUimGetCardStatusOutputCardStatusCardsElementApplicationsElement, j);
+            app = &g_array_index (card->applications, QmiMessageUimGetCardStatusOutputCardStatusCardsElementApplicationsElementV2, j);
 
             str = qmicli_get_raw_data_printable (app->application_identifier_value, 80, "");
 
@@ -1518,7 +1542,7 @@ get_card_status_ready (QmiClientUim *client,
                          "\t\t\tDisable retries:     '%u'\n"
                          "\t\t\tUnblock retries:     '%u'\n",
                          qmi_uim_card_application_personalization_state_get_string (app->personalization_state),
-                         qmi_uim_card_application_personalization_feature_get_string (app->personalization_feature),
+                         qmi_uim_card_application_personalization_feature_status_get_string (app->personalization_feature),
                          app->personalization_retries,
                          app->personalization_unblock_retries);
             else
@@ -1610,7 +1634,8 @@ get_sim_file_id_and_path_with_separator (const gchar *file_path_str,
         * HAVE_QMI_MESSAGE_UIM_GET_FILE_ATTRIBUTES */
 
 #if defined HAVE_QMI_MESSAGE_UIM_READ_TRANSPARENT || \
-    defined HAVE_QMI_MESSAGE_UIM_GET_FILE_ATTRIBUTES
+    defined HAVE_QMI_MESSAGE_UIM_GET_FILE_ATTRIBUTES || \
+    defined HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER
 
 static gboolean
 get_sim_file_id_and_path (const gchar *file_path_str,
@@ -1621,7 +1646,8 @@ get_sim_file_id_and_path (const gchar *file_path_str,
 }
 
 #endif /* HAVE_QMI_MESSAGE_UIM_READ_TRANSPARENT
-        * HAVE_QMI_MESSAGE_UIM_GET_FILE_ATTRIBUTES */
+        * HAVE_QMI_MESSAGE_UIM_GET_FILE_ATTRIBUTES
+        * HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER */
 
 #if defined HAVE_QMI_MESSAGE_UIM_READ_TRANSPARENT
 
@@ -1703,18 +1729,18 @@ read_transparent_build_input (const gchar *file_path_str)
     QmiMessageUimReadTransparentInput *input;
     guint16 file_id = 0;
     GArray *file_path = NULL;
-    GArray *dummy_aid;
+    GArray *placeholder_aid;
 
     if (!get_sim_file_id_and_path (file_path_str, &file_id, &file_path))
         return NULL;
 
-    dummy_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
+    placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
 
     input = qmi_message_uim_read_transparent_input_new ();
     qmi_message_uim_read_transparent_input_set_session (
         input,
         QMI_UIM_SESSION_TYPE_PRIMARY_GW_PROVISIONING,
-        dummy_aid, /* ignored */
+        placeholder_aid, /* ignored */
         NULL);
     qmi_message_uim_read_transparent_input_set_file (
         input,
@@ -1723,7 +1749,7 @@ read_transparent_build_input (const gchar *file_path_str)
         NULL);
     qmi_message_uim_read_transparent_input_set_read_information (input, 0, 0, NULL);
     g_array_unref (file_path);
-    g_array_unref (dummy_aid);
+    g_array_unref (placeholder_aid);
     return input;
 }
 
@@ -1875,7 +1901,7 @@ read_record_input_create (const gchar *str)
     };
     guint16 file_id = 0;
     GArray *file_path = NULL;
-    GArray *dummy_aid;
+    GArray *placeholder_aid;
 
     if (!qmicli_parse_key_value_string (str,
                                         &error,
@@ -1891,14 +1917,14 @@ read_record_input_create (const gchar *str)
     if (!get_sim_file_id_and_path_with_separator (props.file, &file_id, &file_path, "-"))
         goto out;
 
-    dummy_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
+    placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
 
     input = qmi_message_uim_read_record_input_new ();
 
     qmi_message_uim_read_record_input_set_session (
         input,
         QMI_UIM_SESSION_TYPE_PRIMARY_GW_PROVISIONING,
-        dummy_aid, /* ignored */
+        placeholder_aid, /* ignored */
         NULL);
     qmi_message_uim_read_record_input_set_file (
         input,
@@ -1911,7 +1937,7 @@ read_record_input_create (const gchar *str)
         props.record_length,
         NULL);
 
-    g_array_unref (dummy_aid);
+    g_array_unref (placeholder_aid);
 
 out:
     free (props.file);
@@ -2018,7 +2044,12 @@ get_file_attributes_ready (QmiClientUim *client,
             &activate_security_attributes,
             &raw,
             NULL)) {
-        gchar *str;
+        g_autofree gchar *read_security_attributes_str = NULL;
+        g_autofree gchar *write_security_attributes_str = NULL;
+        g_autofree gchar *increase_security_attributes_str = NULL;
+        g_autofree gchar *deactivate_security_attributes_str = NULL;
+        g_autofree gchar *activate_security_attributes_str = NULL;
+        g_autofree gchar *raw_str = NULL;
 
         g_print ("File attributes:\n");
         g_print ("\tFile size: %u\n", (guint)file_size);
@@ -2027,39 +2058,33 @@ get_file_attributes_ready (QmiClientUim *client,
         g_print ("\tRecord size: %u\n", (guint)record_size);
         g_print ("\tRecord count: %u\n", (guint)record_count);
 
-        str = qmi_uim_security_attribute_build_string_from_mask (read_security_attributes);
+        read_security_attributes_str = qmi_uim_security_attribute_build_string_from_mask (read_security_attributes);
         g_print ("\tRead security attributes: (%s) %s\n",
                  qmi_uim_security_attribute_logic_get_string (read_security_attributes_logic),
-                 str);
-        g_free (str);
+                 VALIDATE_MASK_NONE (read_security_attributes_str));
 
-        str = qmi_uim_security_attribute_build_string_from_mask (write_security_attributes);
+        write_security_attributes_str = qmi_uim_security_attribute_build_string_from_mask (write_security_attributes);
         g_print ("\tWrite security attributes: (%s) %s\n",
                  qmi_uim_security_attribute_logic_get_string (write_security_attributes_logic),
-                 str);
-        g_free (str);
+                 VALIDATE_MASK_NONE (write_security_attributes_str));
 
-        str = qmi_uim_security_attribute_build_string_from_mask (increase_security_attributes);
+        increase_security_attributes_str = qmi_uim_security_attribute_build_string_from_mask (increase_security_attributes);
         g_print ("\tIncrease security attributes: (%s) %s\n",
                  qmi_uim_security_attribute_logic_get_string (increase_security_attributes_logic),
-                 str);
-        g_free (str);
+                 VALIDATE_MASK_NONE (increase_security_attributes_str));
 
-        str = qmi_uim_security_attribute_build_string_from_mask (deactivate_security_attributes);
+        deactivate_security_attributes_str = qmi_uim_security_attribute_build_string_from_mask (deactivate_security_attributes);
         g_print ("\tDeactivate security attributes: (%s) %s\n",
                  qmi_uim_security_attribute_logic_get_string (deactivate_security_attributes_logic),
-                 str);
-        g_free (str);
+                 VALIDATE_MASK_NONE (deactivate_security_attributes_str));
 
-        str = qmi_uim_security_attribute_build_string_from_mask (activate_security_attributes);
+        activate_security_attributes_str = qmi_uim_security_attribute_build_string_from_mask (activate_security_attributes);
         g_print ("\tActivate security attributes: (%s) %s\n",
                  qmi_uim_security_attribute_logic_get_string (activate_security_attributes_logic),
-                 str);
-        g_free (str);
+                 VALIDATE_MASK_NONE (activate_security_attributes_str));
 
-        str = qmicli_get_raw_data_printable (raw, 80, "\t");
-        g_print ("\tRaw: %s\n", str);
-        g_free (str);
+        raw_str = qmicli_get_raw_data_printable (raw, 80, "\t");
+        g_print ("\tRaw: %s\n", raw_str);
     }
 
     qmi_message_uim_get_file_attributes_output_unref (output);
@@ -2072,30 +2097,566 @@ get_file_attributes_build_input (const gchar *file_path_str)
     QmiMessageUimGetFileAttributesInput *input;
     guint16 file_id = 0;
     GArray *file_path = NULL;
-    GArray *dummy_aid;
+    GArray *placeholder_aid;
 
     if (!get_sim_file_id_and_path (file_path_str, &file_id, &file_path))
         return NULL;
 
-    dummy_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
+    placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
 
     input = qmi_message_uim_get_file_attributes_input_new ();
     qmi_message_uim_get_file_attributes_input_set_session (
         input,
         QMI_UIM_SESSION_TYPE_PRIMARY_GW_PROVISIONING,
-        dummy_aid, /* ignored */
+        placeholder_aid, /* ignored */
         NULL);
     qmi_message_uim_get_file_attributes_input_set_file (
         input,
         file_id,
         file_path,
         NULL);
-    g_array_unref (dummy_aid);
+    g_array_unref (placeholder_aid);
     g_array_unref (file_path);
     return input;
 }
 
 #endif /* HAVE_QMI_MESSAGE_UIM_GET_FILE_ATTRIBUTES */
+
+#if defined HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER || \
+    defined HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER_ALL
+
+static void
+refresh_complete_ready (QmiClientUim *client,
+                        GAsyncResult *res)
+{
+    QmiMessageUimRefreshCompleteOutput *output;
+    GError *error = NULL;
+
+    output = qmi_client_uim_refresh_complete_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: refresh complete failed: %s\n", error->message);
+        g_error_free (error);
+        return;
+    }
+
+    /* Ignore error, just log it as warning. In case we send complete message when
+     * the modem does not expect it, we could get an error that is harmless.
+     */
+    if (!qmi_message_uim_refresh_complete_output_get_result (output, &error)) {
+        g_warning ("refresh complete failed: %s\n", error->message);
+        g_error_free (error);
+    } else
+        g_debug ("Refresh complete OK.");
+
+    qmi_message_uim_refresh_complete_output_unref (output);
+}
+
+static void
+refresh_complete (QmiClientUim *client,
+                  gboolean success)
+{
+    QmiMessageUimRefreshCompleteInput *refresh_complete_input;
+    GArray *placeholder_aid;
+
+    placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
+
+    refresh_complete_input = qmi_message_uim_refresh_complete_input_new ();
+    qmi_message_uim_refresh_complete_input_set_session (
+        refresh_complete_input,
+        QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
+        placeholder_aid, /* ignored */
+        NULL);
+    qmi_message_uim_refresh_complete_input_set_info (
+        refresh_complete_input,
+        success,
+        NULL);
+
+    qmi_client_uim_refresh_complete (
+        ctx->client,
+        refresh_complete_input,
+        10,
+        ctx->cancellable,
+        (GAsyncReadyCallback) refresh_complete_ready,
+        NULL);
+    qmi_message_uim_refresh_complete_input_unref (refresh_complete_input);
+    g_array_unref (placeholder_aid);
+}
+
+static void
+refresh_received (QmiClientUim *client,
+                  QmiIndicationUimRefreshOutput *output)
+{
+    QmiUimRefreshStage stage;
+    QmiUimRefreshMode mode;
+    GArray *files = NULL;
+    GError *error = NULL;
+    guint i, j;
+
+    g_print ("[%s] Received refresh indication:\n",
+             qmi_device_get_path_display (ctx->device));
+    if (!qmi_indication_uim_refresh_output_get_event (
+          output, &stage, &mode, NULL, NULL, &files, &error)) {
+        g_printerr ("error: could not parse refresh ind: %s\n", error->message);
+        g_error_free (error);
+        operation_shutdown (FALSE);
+        return;
+    }
+    g_print ("  Refresh stage: %s\n",
+             qmi_uim_refresh_stage_get_string (stage));
+    g_print ("  Refresh mode: %s\n",
+             qmi_uim_refresh_mode_get_string (mode));
+    g_print ("  Files:\n");
+    if (files && files->len > 0)
+        for (i = 0; i < files->len; i++) {
+            QmiIndicationUimRefreshOutputEventFilesElement *file;
+            GArray *path;
+
+            file = &g_array_index (files, QmiIndicationUimRefreshOutputEventFilesElement, i);
+            g_print ("    0x%x; path:",
+                     file->file_id);
+            path = file->path;
+            if (path && path->len >= 2)
+                for (j = 0; j < path->len / 2; j++) {
+                    guint16 path_component;
+                    path_component = g_array_index (path, guint8, j * 2) |
+                                    ((guint16)g_array_index (path, guint8, j * 2 + 1) << 8);
+                    g_print (" 0x%x", path_component);
+                }
+            else
+                g_print (" <none>");
+            g_print ("\n");
+        }
+    else
+        g_print ("    <none>\n");
+    /* Send refresh complete message only in start stage and only if the
+     * mode is something other than reset.
+     */
+    if (stage == QMI_UIM_REFRESH_STAGE_START && mode != QMI_UIM_REFRESH_MODE_RESET)
+        refresh_complete (client, TRUE);
+}
+
+static void
+refresh_cancelled (GCancellable *cancellable)
+{
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER
+        * HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER_ALL */
+
+#if defined HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER
+
+static void
+register_refresh_events_ready (QmiClientUim *client,
+                               GAsyncResult *res)
+{
+    QmiMessageUimRefreshRegisterOutput *output;
+    GError *error = NULL;
+
+    output = qmi_client_uim_refresh_register_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        g_error_free (error);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_uim_refresh_register_output_get_result (output, &error)) {
+        g_printerr ("error: could not register refresh file events: %s\n", error->message);
+        qmi_message_uim_refresh_register_output_unref (output);
+        g_error_free (error);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_debug ("Registered refresh file events...");
+    ctx->refresh_indication_id =
+        g_signal_connect (ctx->client,
+                          "refresh",
+                          G_CALLBACK (refresh_received),
+                          NULL);
+
+    /* User can use Ctrl+C to cancel the monitoring at any time */
+    g_cancellable_connect (ctx->cancellable,
+                           G_CALLBACK (refresh_cancelled),
+                           NULL,
+                           NULL);
+    qmi_message_uim_refresh_register_output_unref (output);
+}
+
+static void
+register_refresh_events (gchar **file_path_array)
+{
+    QmiMessageUimRefreshRegisterInput *refresh_input;
+    GArray *placeholder_aid;
+    GArray *file_list;
+    QmiMessageUimRefreshRegisterInputInfoFilesElement file_element;
+    guint i;
+
+    file_list = g_array_new (FALSE, FALSE, sizeof (QmiMessageUimRefreshRegisterInputInfoFilesElement));
+    while (*file_path_array) {
+        memset (&file_element, 0, sizeof (file_element));
+        if (!get_sim_file_id_and_path (*file_path_array, &file_element.file_id, &file_element.path))
+            goto out;
+
+        g_array_append_val (file_list, file_element);
+        file_path_array++;
+    }
+
+    placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
+    refresh_input = qmi_message_uim_refresh_register_input_new ();
+    qmi_message_uim_refresh_register_input_set_session (
+        refresh_input,
+        QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
+        placeholder_aid, /* ignored */
+        NULL);
+    qmi_message_uim_refresh_register_input_set_info (
+        refresh_input,
+        TRUE,
+        FALSE,
+        file_list,
+        NULL);
+
+    qmi_client_uim_refresh_register (
+        ctx->client,
+        refresh_input,
+        10,
+        ctx->cancellable,
+        (GAsyncReadyCallback) register_refresh_events_ready,
+        NULL);
+    qmi_message_uim_refresh_register_input_unref (refresh_input);
+    g_array_unref (placeholder_aid);
+
+out:
+    for (i = 0; i < file_list->len; i++) {
+        QmiMessageUimRefreshRegisterInputInfoFilesElement *file;
+        file = &g_array_index (file_list, QmiMessageUimRefreshRegisterInputInfoFilesElement, i);
+        g_array_unref (file->path);
+    }
+    g_array_unref (file_list);
+}
+
+#endif /* HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER */
+
+#if defined HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER_ALL
+
+static void
+register_refresh_all_events_ready (QmiClientUim *client,
+                                   GAsyncResult *res)
+{
+    QmiMessageUimRefreshRegisterAllOutput *output;
+    GError *error = NULL;
+
+    output = qmi_client_uim_refresh_register_all_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        g_error_free (error);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_uim_refresh_register_all_output_get_result (output, &error)) {
+        g_printerr ("error: could not register refresh file events: %s\n", error->message);
+        qmi_message_uim_refresh_register_all_output_unref (output);
+        g_error_free (error);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_debug ("Registered refresh all file events...");
+    ctx->refresh_indication_id =
+        g_signal_connect (ctx->client,
+                          "refresh",
+                          G_CALLBACK (refresh_received),
+                          NULL);
+
+    /* User can use Ctrl+C to cancel the monitoring at any time */
+    g_cancellable_connect (ctx->cancellable,
+                           G_CALLBACK (refresh_cancelled),
+                           NULL,
+                           NULL);
+    qmi_message_uim_refresh_register_all_output_unref (output);
+}
+
+static void
+register_refresh_all_events (void)
+{
+    QmiMessageUimRefreshRegisterAllInput *refresh_all_input;
+    GArray *placeholder_aid;
+
+    refresh_all_input = qmi_message_uim_refresh_register_all_input_new ();
+    placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
+    qmi_message_uim_refresh_register_all_input_set_session (
+        refresh_all_input,
+        QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
+        placeholder_aid, /* ignored */
+        NULL);
+
+    qmi_message_uim_refresh_register_all_input_set_info (
+        refresh_all_input,
+        TRUE,
+        NULL);
+    qmi_client_uim_refresh_register_all (
+        ctx->client,
+        refresh_all_input,
+        10,
+        ctx->cancellable,
+        (GAsyncReadyCallback) register_refresh_all_events_ready,
+        NULL);
+    qmi_message_uim_refresh_register_all_input_unref (refresh_all_input);
+    g_array_unref (placeholder_aid);
+}
+
+#endif /* HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER_ALL */
+
+#if defined HAVE_QMI_MESSAGE_UIM_GET_CONFIGURATION
+
+static QmiMessageUimGetConfigurationInput *
+get_configuration_input_create (void)
+{
+    QmiMessageUimGetConfigurationInput *input;
+
+    input = qmi_message_uim_get_configuration_input_new ();
+
+    qmi_message_uim_get_configuration_input_set_configuration_mask (
+        input,
+        QMI_UIM_CONFIGURATION_PERSONALIZATION_STATUS,
+        NULL);
+
+    return input;
+}
+
+static void
+get_configuration_ready (QmiClientUim *client,
+                         GAsyncResult *res)
+{
+    g_autoptr(QmiMessageUimGetConfigurationOutput) output = NULL;
+    g_autoptr(GError)                              error = NULL;
+    GArray                                        *elements = NULL;
+    GArray                                        *other_slots = NULL;
+
+    output = qmi_client_uim_get_configuration_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_uim_get_configuration_output_get_result (output, &error)) {
+        g_printerr ("error: get configuration failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("Configuration successfully retrieved\n");
+
+    /* Other slots TLV contains info for slots > 1 */
+    qmi_message_uim_get_configuration_output_get_personalization_status_other (output, &other_slots, NULL);
+
+    if (qmi_message_uim_get_configuration_output_get_personalization_status (output, &elements, NULL)) {
+        if (elements->len == 0)
+            g_print ("Personalization features%s: all disabled\n",
+                     other_slots ? " in slot 1" : "");
+        else {
+            QmiMessageUimGetConfigurationOutputPersonalizationStatusElement *element;
+            guint i;
+
+            g_print ("Personalization features%s:\n",
+                     other_slots ? " in slot 1" : "");
+            for (i = 0; i < elements->len; i++) {
+                element = &g_array_index (elements,
+                                          QmiMessageUimGetConfigurationOutputPersonalizationStatusElement,
+                                          i);
+                g_print ("\tPersonalization: %s\n"
+                         "\t\tVerify left:  %u\n"
+                         "\t\tUnblock left: %u\n",
+                         qmi_uim_card_application_personalization_feature_get_string (element->feature),
+                         element->verify_left,
+                         element->unblock_left);
+            }
+        }
+    }
+
+    if (other_slots) {
+        if (other_slots->len == 0)
+            g_print ("Personalization features in other slots: all disabled\n");
+        else {
+            guint i_slot;
+
+            for (i_slot = 0; i_slot < other_slots->len; i_slot++) {
+                QmiMessageUimGetConfigurationOutputPersonalizationStatusOtherElement *slot_element;
+                guint i;
+
+                slot_element = &g_array_index (other_slots, QmiMessageUimGetConfigurationOutputPersonalizationStatusOtherElement, i_slot);
+                if (!slot_element->slot)
+                    continue;
+
+                g_print ("Personalization features in slot %u:\n", i_slot + 2);
+                for (i = 0; i < slot_element->slot->len; i++) {
+                    QmiMessageUimGetConfigurationOutputPersonalizationStatusOtherElementSlotElement *element;
+
+                    element = &g_array_index (slot_element->slot,
+                                              QmiMessageUimGetConfigurationOutputPersonalizationStatusOtherElementSlotElement,
+                                              i);
+                    g_print ("\tPersonalization: %s\n"
+                             "\t\tVerify left:  %u\n"
+                             "\t\tUnblock left: %u\n",
+                             qmi_uim_card_application_personalization_feature_get_string (element->feature),
+                             element->verify_left,
+                             element->unblock_left);
+                }
+            }
+        }
+    }
+
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_UIM_GET_CONFIGURATION */
+
+#if defined HAVE_QMI_MESSAGE_UIM_DEPERSONALIZATION
+
+static QmiMessageUimDepersonalizationInput *
+depersonalization_input_create (const gchar *str)
+{
+    g_auto(GStrv)                                split = NULL;
+    QmiMessageUimDepersonalizationInput         *input = NULL;
+    QmiUimCardApplicationPersonalizationFeature  feature;
+    QmiUimDepersonalizationOperation             operation;
+    const gchar                                 *control_key;
+    guint                                        slot = 0;
+
+    /* Prepare inputs.
+     * Format of the string is:
+     *    "[(feature),(operation),(control key)[,(slot number)]]"
+     */
+    split = g_strsplit (str, ",", -1);
+
+    if (!split[0] || !qmicli_read_uim_card_application_personalization_feature_from_string (split[0], &feature)) {
+        g_printerr ("error: invalid personalization feature\n");
+        return NULL;
+    }
+
+    if (!split[1] || !qmicli_read_uim_depersonalization_operation_from_string (split[1], &operation)) {
+        g_printerr ("error: invalid depersonalization operation\n");
+        return NULL;
+    }
+
+    if (!split[2]) {
+        g_printerr ("error: missing control key\n");
+        return NULL;
+    }
+    control_key = split[2];
+
+    if (g_strv_length (split) > 3) {
+        if (!qmicli_read_uint_from_string (split[3], &slot) || (slot < 1) || (slot > 5)) {
+            g_printerr ("error: invalid slot number\n");
+            return NULL;
+        }
+    }
+
+    input = qmi_message_uim_depersonalization_input_new ();
+    qmi_message_uim_depersonalization_input_set_info (input, feature, operation, control_key, NULL);
+
+    /* skip setting slot if not given by the user */
+    if (slot > 0)
+        qmi_message_uim_depersonalization_input_set_slot (input, slot, NULL);
+
+    return input;
+}
+
+static void
+depersonalization_ready (QmiClientUim *client,
+                         GAsyncResult *res)
+{
+    g_autoptr(QmiMessageUimDepersonalizationOutput) output = NULL;
+    g_autoptr(GError)                               error = NULL;
+    guint8                                          unblock_left;
+    guint8                                          verify_left;
+
+    output = qmi_client_uim_depersonalization_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (qmi_message_uim_depersonalization_output_get_result (output, &error)) {
+        g_print ("Modem was unlocked successfully\n");
+        operation_shutdown (TRUE);
+        return;
+    }
+
+    g_printerr ("error: depersonalization failed: %s\n", error->message);
+    if (qmi_message_uim_depersonalization_output_get_retries_remaining (
+            output,
+            &verify_left,
+            &unblock_left,
+            NULL)) {
+        g_printerr ("Retries left:\n"
+                    "\tVerify: %u\n"
+                    "\tUnblock: %u\n",
+                    verify_left,
+                    unblock_left);
+    }
+
+    operation_shutdown (FALSE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_UIM_DEPERSONALIZATION */
+
+#if defined HAVE_QMI_MESSAGE_UIM_REMOTE_UNLOCK
+
+static QmiMessageUimRemoteUnlockInput *
+remote_unlock_input_create (const gchar *simlock_data_str)
+{
+    QmiMessageUimRemoteUnlockInput *input;
+    GArray                         *simlock_data = NULL;
+
+    if (!qmicli_read_raw_data_from_string (simlock_data_str, &simlock_data))
+        return NULL;
+
+    input = qmi_message_uim_remote_unlock_input_new ();
+
+    if (simlock_data->len <= 1024) {
+        qmi_message_uim_remote_unlock_input_set_simlock_data (input,
+                                                              simlock_data,
+                                                              NULL);
+    } else {
+        qmi_message_uim_remote_unlock_input_set_simlock_extended_data (input,
+                                                                       simlock_data,
+                                                                       NULL);
+    }
+
+    g_array_unref (simlock_data);
+    return input;
+}
+
+static void
+remote_unlock_ready (QmiClientUim *client,
+                     GAsyncResult *res)
+{
+    g_autoptr(QmiMessageUimRemoteUnlockOutput) output = NULL;
+    g_autoptr(GError)                          error = NULL;
+
+    output = qmi_client_uim_remote_unlock_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_uim_remote_unlock_output_get_result (output, &error)) {
+        g_printerr ("error: remote unlock operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("Remote unlock operation successfully completed\n");
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_UIM_REMOTE_UNLOCK */
 
 void
 qmicli_uim_run (QmiDevice *device,
@@ -2399,6 +2960,22 @@ qmicli_uim_run (QmiDevice *device,
     }
 #endif
 
+#if defined HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER
+    if (monitor_refresh_file_array) {
+        g_debug ("Listening for refresh events...");
+        register_refresh_events (monitor_refresh_file_array);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_UIM_REFRESH_REGISTER_ALL
+    if (monitor_refresh_all_flag) {
+        g_debug ("Listening for all refresh events...");
+        register_refresh_all_events ();
+        return;
+    }
+#endif
+
 #if defined HAVE_QMI_MESSAGE_UIM_RESET
     /* Request to reset UIM service? */
     if (reset_flag) {
@@ -2409,6 +2986,73 @@ qmicli_uim_run (QmiDevice *device,
                               ctx->cancellable,
                               (GAsyncReadyCallback)reset_ready,
                               NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_UIM_GET_CONFIGURATION
+    /* Request to get personalization status? */
+    if (get_configuration_flag) {
+        g_autoptr(QmiMessageUimGetConfigurationInput) input = NULL;
+
+        g_debug ("Asynchronously getting UIM configuration...");
+        input = get_configuration_input_create ();
+        if (!input) {
+            operation_shutdown (FALSE);
+            return;
+        }
+
+        qmi_client_uim_get_configuration (ctx->client,
+                                          input,
+                                          10,
+                                          ctx->cancellable,
+                                          (GAsyncReadyCallback)get_configuration_ready,
+                                          NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_UIM_DEPERSONALIZATION
+    /* Request to depersonalize the modem? */
+    if (depersonalization_str) {
+        g_autoptr(QmiMessageUimDepersonalizationInput) input = NULL;
+
+        g_debug ("Asynchronously removing personalization...");
+        input = depersonalization_input_create (depersonalization_str);
+        if (!input) {
+            operation_shutdown (FALSE);
+            return;
+        }
+
+        qmi_client_uim_depersonalization (ctx->client,
+                                          input,
+                                          10,
+                                          ctx->cancellable,
+                                          (GAsyncReadyCallback)depersonalization_ready,
+                                          NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_UIM_REMOTE_UNLOCK
+    /* Request to perform remote unlock operations? */
+    if (remote_unlock_str) {
+        g_autoptr(QmiMessageUimRemoteUnlockInput) input = NULL;
+
+        g_debug ("Asynchronously updating SimLock data...");
+        input = remote_unlock_input_create (remote_unlock_str);
+        if (!input) {
+            g_printerr ("error: couldn't parse the input string as a bytearray\n");
+            operation_shutdown (FALSE);
+            return;
+        }
+
+        qmi_client_uim_remote_unlock (ctx->client,
+                                      input,
+                                      10,
+                                      ctx->cancellable,
+                                      (GAsyncReadyCallback)remote_unlock_ready,
+                                      NULL);
         return;
     }
 #endif

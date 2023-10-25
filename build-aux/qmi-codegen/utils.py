@@ -15,7 +15,7 @@
 # Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 # Copyright (C) 2012 Lanedo GmbH
-# Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>
+# Copyright (C) 2012-2022 Aleksander Morgado <aleksander@aleksander.es>
 #
 
 import string
@@ -46,7 +46,7 @@ def add_copyright(f):
         " * Boston, MA 02110-1301 USA.\n"
         " *\n"
         " * Copyright (C) 2012 Lanedo GmbH\n"
-        " * Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>\n"
+        " * Copyright (C) 2012-2022 Aleksander Morgado <aleksander@aleksander.es>\n"
         " */\n"
         "\n");
 
@@ -70,15 +70,15 @@ def add_header_start(f, output_name, service):
         "#include <gio/gio.h>\n"
         "\n"
         "#include \"qmi-enums.h\"\n")
-    # CTL and GMS don't have enums
-    if service not in ('CTL', 'GMS'):
+    # CTL, DPM, GMS, ATR and IMS don't have enums
+    if service not in ('CTL', 'DPM', 'GMS', 'ATR', 'IMS'):
         template += (
             "#include \"qmi-enums-${service}.h\"\n")
     if service == 'CTL':
         template += (
             "#include \"qmi-enums-private.h\"\n")
-    # DMS, NAS, LOC and DSD have flags64
-    if service in ('DMS', 'NAS', 'LOC', 'DSD'):
+    # DMS, NAS, LOC, DSD and WDS have flags64
+    if service in ('DMS', 'NAS', 'LOC', 'DSD', 'WDS'):
         template += (
             "#include \"qmi-flags64-${service}.h\"\n")
     template += (
@@ -115,11 +115,13 @@ def add_source_start(f, output_name):
         "\n"
         "#include \"${name}.h\"\n"
         "#include \"qmi-enum-types.h\"\n"
+        "#include \"qmi-flag-types.h\"\n"
         "#include \"qmi-enum-types-private.h\"\n"
+        "#include \"qmi-flag-types-private.h\"\n"
         "#include \"qmi-flags64-types.h\"\n"
         "#include \"qmi-error-types.h\"\n"
         "#include \"qmi-device.h\"\n"
-        "#include \"qmi-utils-private.h\"\n"
+        "#include \"qmi-helpers.h\"\n"
         '\n'
         '#define QMI_STATUS_SUCCESS 0x0000\n'
         '#define QMI_STATUS_FAILURE 0x0001\n'
@@ -251,3 +253,34 @@ def format_is_integer(fmt):
         return True
     else:
         return False
+
+
+"""
+Compare two version strings given in MAJOR.MINOR[.MICRO] format.
+Just to avoid needing to include e.g. packaging.version.parse just for this
+"""
+def version_compare(v1,v2):
+    v1_split = v1.split(".")
+    v2_split = v2.split(".")
+    major_v1 = int(v1_split[0])
+    major_v2 = int(v2_split[0])
+    if major_v2 > major_v1:
+        return 1
+    if major_v2 < major_v1:
+        return -1
+    # major_v2 == major_v1
+    minor_v1 = int(v1_split[1])
+    minor_v2 = int(v2_split[1])
+    if minor_v2 > minor_v1:
+        return 1
+    if minor_v2 < minor_v1:
+        return -1
+    # minor_v2 == minor_v1
+    micro_v1 = int(v1_split[2]) if len(v1_split) > 2 else 0
+    micro_v2 = int(v2_split[2]) if len(v2_split) > 2 else 0
+    if micro_v2 > micro_v1:
+        return 1
+    if micro_v2 < micro_v1:
+        return -1
+    # micro_v2 == micro_v1
+    return 0

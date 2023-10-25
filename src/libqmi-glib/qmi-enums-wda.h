@@ -29,6 +29,8 @@
 
 /**
  * SECTION: qmi-enums-wda
+ * @title: WDA enumerations and flags
+ * @short_description: Enumerations and flags in the WDA service.
  *
  * This section defines enumerations and flags used in the WDA service
  * interface.
@@ -58,6 +60,10 @@ typedef enum { /*< since=1.10 >*/
  * @QMI_WDA_DATA_AGGREGATION_PROTOCOL_MBIM: MBIM enabled.
  * @QMI_WDA_DATA_AGGREGATION_PROTOCOL_RNDIS: RNDIS enabled.
  * @QMI_WDA_DATA_AGGREGATION_PROTOCOL_QMAP: QMAP enabled.
+ * @QMI_WDA_DATA_AGGREGATION_PROTOCOL_QMAPV2: QMAPV2 enabled. Since: 1.30.
+ * @QMI_WDA_DATA_AGGREGATION_PROTOCOL_QMAPV3: QMAPV3 enabled. Since: 1.30.
+ * @QMI_WDA_DATA_AGGREGATION_PROTOCOL_QMAPV4: QMAPV4 enabled. Since: 1.30.
+ * @QMI_WDA_DATA_AGGREGATION_PROTOCOL_QMAPV5: QMAPV5 enabled. Since: 1.28.
  *
  * Data aggregation protocol in uplink or downlink.
  *
@@ -70,6 +76,10 @@ typedef enum { /*< since=1.10 >*/
     QMI_WDA_DATA_AGGREGATION_PROTOCOL_MBIM     = 0x03,
     QMI_WDA_DATA_AGGREGATION_PROTOCOL_RNDIS    = 0x04,
     QMI_WDA_DATA_AGGREGATION_PROTOCOL_QMAP     = 0x05,
+    QMI_WDA_DATA_AGGREGATION_PROTOCOL_QMAPV2   = 0x06,
+    QMI_WDA_DATA_AGGREGATION_PROTOCOL_QMAPV3   = 0x07,
+    QMI_WDA_DATA_AGGREGATION_PROTOCOL_QMAPV4   = 0x08,
+    QMI_WDA_DATA_AGGREGATION_PROTOCOL_QMAPV5   = 0x09,
 } QmiWdaDataAggregationProtocol;
 
 #endif /* _LIBQMI_GLIB_QMI_ENUMS_WDA_H_ */

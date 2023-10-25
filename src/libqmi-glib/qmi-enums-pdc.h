@@ -30,6 +30,8 @@
 
 /**
  * SECTION: qmi-enums-pdc
+ * @title: PDC enumerations and flags
+ * @short_description: Enumerations and flags in the PDC service.
  *
  * This section defines enumerations and flags used in the PDC service
  * interface.
@@ -51,5 +53,21 @@ typedef enum { /*< since=1.18 >*/
    QMI_PDC_CONFIGURATION_TYPE_PLATFORM = 0,
    QMI_PDC_CONFIGURATION_TYPE_SOFTWARE = 1,
 } QmiPdcConfigurationType;
+
+/**
+ * QmiPdcRefreshEventType:
+ * @QMI_PDC_REFRESH_START: Refresh start event
+ * @QMI_PDC_REFRESH_COMPLETE: Refresh complete event
+ * @QMI_PDC_REFRESH_CLIENT_REFRESH: Client refresh event
+ *
+ * Refresh event type.
+ *
+ * Since: 1.32
+ */
+typedef enum { /*< since=1.32 >*/
+    QMI_PDC_REFRESH_START = 0,
+    QMI_PDC_REFRESH_COMPLETE = 1,
+    QMI_PDC_REFRESH_CLIENT_REFRESH = 2,
+} QmiPdcRefreshEventType;
 
 #endif /* _LIBQMI_GLIB_QMI_ENUMS_PDC_H_ */

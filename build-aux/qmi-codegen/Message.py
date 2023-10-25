@@ -15,7 +15,8 @@
 # Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 # Copyright (C) 2012 Lanedo GmbH
-# Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>
+# Copyright (C) 2012-2022 Aleksander Morgado <aleksander@aleksander.es>
+# Copyright (c) 2022 Qualcomm Innovation Center, Inc.
 #
 
 import string
@@ -32,6 +33,12 @@ class Message:
     Constructor
     """
     def __init__(self, dictionary, common_objects_dictionary):
+        # Validate input fields in the dictionary, and only allow those
+        # explicitly expected.
+        for message_key in dictionary:
+            if message_key not in [ "name", "type", "service", "id", "since", "input", "output", "vendor", "scope", "abort", "output-compat", "input-compat" ]:
+                raise ValueError('Invalid message field: "' + message_key + '"')
+
         # The message service, e.g. "Ctl"
         self.service = dictionary['service']
         # The name of the specific message, e.g. "Something"
@@ -40,10 +47,6 @@ class Message:
         self.id = dictionary['id']
         # The type, which must always be 'Message' or 'Indication'
         self.type = dictionary['type']
-
-        # The message version info is no longer supported
-        if 'version' in dictionary:
-            raise ValueError('The "version" tag is no longer supported')
 
         self.static = True if 'scope' in dictionary and dictionary['scope'] == 'library-only' else False
         self.abort = True if 'abort' in dictionary and dictionary['abort'] == 'yes' else False
@@ -76,12 +79,15 @@ class Message:
         # will generate a new Output type and public getters for each output
         # field. This applies to both Request/Response and Indications.
         # Output containers are actually optional in Indications
-        self.output = Container(self.fullname,
+        self.output_compat = True if 'output-compat' in dictionary and dictionary['output-compat'] == 'yes' else False
+        self.output = Container(self.service,
+                                self.fullname,
                                 'Output',
                                 dictionary['output'] if 'output' in dictionary else None,
                                 common_objects_dictionary,
                                 self.static,
-                                self.since)
+                                self.since,
+                                self.output_compat)
 
         self.input = None
         if self.type == 'Message':
@@ -89,12 +95,15 @@ class Message:
             # Every defined message will have its own input container, which
             # will generate a new Input type and public getters for each input
             # field
-            self.input = Container(self.fullname,
+            self.input_compat = True if 'input-compat' in dictionary and dictionary['input-compat'] == 'yes' else False
+            self.input = Container(self.service,
+                                   self.fullname,
                                    'Input',
                                    dictionary['input'] if 'input' in dictionary else None,
                                    common_objects_dictionary,
                                    self.static,
-                                   self.since)
+                                   self.since,
+                                   self.input_compat)
 
 
     """
@@ -196,15 +205,38 @@ class Message:
 
         translations = { 'name'                 : self.name,
                          'type'                 : 'response' if self.type == 'Message' else 'indication',
+                         'method_prefix'        : '__' if self.static else '',
+                         'method_scope'         : 'static ' if self.static else '',
+                         'since'                : self.since if utils.version_compare('1.34',self.since) > 0 else '1.34',
                          'container'            : utils.build_camelcase_name (self.output.fullname),
                          'container_underscore' : utils.build_underscore_name (self.output.fullname),
                          'underscore'           : utils.build_underscore_name (self.fullname),
                          'message_id'           : self.id_enum_name }
 
+        if not self.static:
+            template = (
+                '\n'
+                '/**\n'
+                ' * ${method_prefix}${underscore}_${type}_parse:\n'
+                ' * @message: a #QmiMessage.\n'
+                ' * @error: return location for error or %NULL.\n'
+                ' *\n'
+                ' * Parses a #QmiMessage and builds a #${container} out of it.\n'
+                ' * The operation fails if the message is of the wrong type.\n'
+                ' *\n'
+                ' * Returns: a #${container}, or %NULL if @error is set. The returned value should be freed with ${container_underscore}_unref().\n'
+                ' *\n'
+                ' * Since: ${since}\n'
+                ' */\n'
+                '${container} *${method_prefix}${underscore}_${type}_parse (\n'
+                '    QmiMessage *message,\n'
+                '    GError **error);\n')
+            hfile.write(string.Template(template).substitute(translations))
+
         template = (
             '\n'
-            'static ${container} *\n'
-            '__${underscore}_${type}_parse (\n'
+            '${method_scope}${container} *\n'
+            '${method_prefix}${underscore}_${type}_parse (\n'
             '    QmiMessage *message,\n'
             '    GError **error)\n'
             '{\n'
@@ -277,6 +309,7 @@ class Message:
                 '{\n'
                 '    const gchar *tlv_type_str = NULL;\n'
                 '    g_autofree gchar *translated_value = NULL;\n'
+                '    gboolean value_has_personal_info = FALSE;\n'
                 '\n')
 
             if self.type == 'Message':
@@ -294,7 +327,11 @@ class Message:
                             '            tlv_type_str = "${field_name}";\n'
                             '            translated_value = ${underscore_field}_get_printable (\n'
                             '                                   ctx->self,\n'
-                            '                                   ctx->line_prefix);\n'
+                            '                                   ctx->line_prefix);\n')
+                        if field.variable is not None and field.variable.contains_personal_info:
+                            field_template += (
+                                '            value_has_personal_info = TRUE;\n')
+                        field_template += (
                             '            break;\n')
                         template += string.Template(field_template).substitute(translations)
 
@@ -317,7 +354,11 @@ class Message:
                         '            tlv_type_str = "${field_name}";\n'
                         '            translated_value = ${underscore_field}_get_printable (\n'
                         '                                   ctx->self,\n'
-                        '                                   ctx->line_prefix);\n'
+                        '                                   ctx->line_prefix);\n')
+                    if field.variable is not None and field.variable.contains_personal_info:
+                        field_template += (
+                            '            value_has_personal_info = TRUE;\n')
+                    field_template += (
                         '            break;\n')
                     template += string.Template(field_template).substitute(translations)
 
@@ -339,7 +380,11 @@ class Message:
                 '    } else {\n'
                 '        g_autofree gchar *value_hex = NULL;\n'
                 '\n'
-                '        value_hex = __qmi_utils_str_hex (value, length, \':\');\n'
+                '        if (qmi_utils_get_show_personal_info () || !value_has_personal_info)\n'
+                '            value_hex = qmi_helpers_str_hex (value, length, \':\');\n'
+                '        else\n'
+                '            value_hex = g_strdup ("###...");\n'
+                '\n'
                 '        g_string_append_printf (ctx->printable,\n'
                 '                                "%sTLV:\\n"\n'
                 '                                "%s  type       = \\"%s\\" (0x%02x)\\n"\n'
@@ -398,6 +443,22 @@ class Message:
             utils.add_separator(hfile, 'INDICATION', self.fullname);
             utils.add_separator(cfile, 'INDICATION', self.fullname);
 
+        if not self.static and self.service != 'CTL':
+            translations = { 'hyphened' : utils.build_dashed_name (self.fullname),
+                             'fullname' : self.service + ' ' + self.name,
+                             'type'     : 'response' if self.type == 'Message' else 'indication',
+                             'operation' : 'create requests and parse responses' if self.type == 'Message' else 'parse indications' }
+            template = (
+                '\n'
+                '/**\n'
+                ' * SECTION: ${hyphened}\n'
+                ' * @title: ${fullname} ${type}\n'
+                ' * @short_description: Methods to manage the ${fullname} ${type}.\n'
+                ' *\n'
+                ' * Collection of methods to ${operation} of the ${fullname} message.\n'
+                ' */\n')
+            hfile.write(string.Template(template).substitute(translations))
+
         if self.type == 'Message':
             hfile.write('\n/* --- Input -- */\n');
             cfile.write('\n/* --- Input -- */\n');
@@ -436,13 +497,23 @@ class Message:
         self.output.add_sections (sections)
 
         if self.type == 'Message':
-            template = (
+            template = ''
+            if not self.static and self.output is not None and self.output.fields is not None:
+                template += (
+                    '<SUBSECTION ${camelcase}Parsers>\n'
+                    'qmi_message_${service}_${name_underscore}_response_parse\n')
+            template += (
                 '<SUBSECTION ${camelcase}ClientMethods>\n'
                 'qmi_client_${service}_${name_underscore}\n'
                 'qmi_client_${service}_${name_underscore}_finish\n')
             sections['public-methods'] += string.Template(template).substitute(translations)
             translations['message_type'] = 'request'
         elif self.type == 'Indication':
+            if not self.static and self.output is not None and self.output.fields is not None:
+                template = (
+                    '<SUBSECTION ${camelcase}Parsers>\n'
+                    'qmi_indication_${service}_${name_underscore}_indication_parse\n')
+                sections['public-methods'] += string.Template(template).substitute(translations)
             translations['message_type'] = 'indication'
 
         translations['public_types']   = sections['public-types']
@@ -453,7 +524,6 @@ class Message:
         template = (
             '<SECTION>\n'
             '<FILE>${hyphened}</FILE>\n'
-            '<TITLE>${fullname} ${message_type}</TITLE>\n'
             '${public_types}'
             '${public_methods}'
             '<SUBSECTION Private>\n'

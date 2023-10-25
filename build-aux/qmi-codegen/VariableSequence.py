@@ -15,7 +15,8 @@
 # Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 # Copyright (C) 2012 Lanedo GmbH
-# Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>
+# Copyright (C) 2012-2022 Aleksander Morgado <aleksander@aleksander.es>
+# Copyright (c) 2022 Qualcomm Innovation Center, Inc.
 #
 
 import string
@@ -28,13 +29,10 @@ Variable type for Sequences ('sequence' format)
 """
 class VariableSequence(Variable):
 
-    """
-    Constructor
-    """
-    def __init__(self, dictionary, sequence_type_name, container_type):
+    def __init__(self, service, dictionary, sequence_type_name, container_type):
 
         # Call the parent constructor
-        Variable.__init__(self, dictionary)
+        Variable.__init__(self, service, dictionary)
 
         self.container_type = container_type
 
@@ -43,57 +41,51 @@ class VariableSequence(Variable):
         for member_dictionary in dictionary['contents']:
             member = {}
             member['name'] = utils.build_underscore_name(member_dictionary['name'])
-            member['object'] = VariableFactory.create_variable(member_dictionary, sequence_type_name + ' ' + member_dictionary['name'], self.container_type)
+            member['object'] = VariableFactory.create_variable(self.service, member_dictionary, sequence_type_name + ' ' + member_dictionary['name'], self.container_type)
             self.members.append(member)
 
-        # TODO: do we need this?
         # We'll need to dispose if at least one of the members needs it
         for member in self.members:
-            if member['object'].needs_dispose == True:
+            if member['object'].needs_dispose:
                 self.needs_dispose = True
+                break
 
-
-    """
-    Emit all types for the members of the sequence
-    """
-    def emit_types(self, f, since, static):
-        # Emit types for each member
+        # We'll flag the variable as needing compat GIR methods if we find any
+        # sequence member needing it
         for member in self.members:
-            member['object'].emit_types(f, since, static)
+            if member['object'].needs_compat_gir:
+                self.needs_compat_gir = True
+                break
+
+        # We'll contain personal info if at least one of the members contains personal info or we ourselves are personal info
+        if not self.contains_personal_info:
+            for member in self.members:
+                if member['object'].contains_personal_info:
+                    self.contains_personal_info = True
+                    break
 
 
-    """
-    Emit helper methods for all types in the struct
-    """
-    def emit_helper_methods(self, hfile, cfile):
-        # Emit for each member
+    def emit_types(self, hfile, cfile, since, static):
         for member in self.members:
-            member['object'].emit_helper_methods(hfile, cfile)
+            member['object'].emit_types(hfile, cfile, since, static)
 
 
-    """
-    Reading the contents of a sequence is just about reading each of the sequence
-    fields one by one.
-    """
+    def emit_types_gir(self, hfile, cfile, since):
+        for member in self.members:
+            member['object'].emit_types_gir(hfile, cfile, since)
+
+
     def emit_buffer_read(self, f, line_prefix, tlv_out, error, variable_name):
         for member in self.members:
             member['object'].emit_buffer_read(f, line_prefix, tlv_out, error, variable_name + '_' +  member['name'])
 
 
-    """
-    Writing the contents of a sequence is just about writing each of the sequence
-    fields one by one.
-    """
     def emit_buffer_write(self, f, line_prefix, tlv_name, variable_name):
         for member in self.members:
             member['object'].emit_buffer_write(f, line_prefix, tlv_name, variable_name + '_' +  member['name'])
 
 
-    """
-    The sequence will be printed as a list of fields enclosed between square
-    brackets
-    """
-    def emit_get_printable(self, f, line_prefix):
+    def emit_get_printable(self, f, line_prefix, is_personal):
         translations = { 'lp' : line_prefix }
 
         template = (
@@ -106,7 +98,7 @@ class VariableSequence(Variable):
                 '${lp}g_string_append (printable, " ${variable_name} = \'");\n')
             f.write(string.Template(template).substitute(translations))
 
-            member['object'].emit_get_printable(f, line_prefix)
+            member['object'].emit_get_printable(f, line_prefix, self.personal_info or is_personal)
 
             template = (
                 '${lp}g_string_append (printable, "\'");\n')
@@ -117,20 +109,24 @@ class VariableSequence(Variable):
         f.write(string.Template(template).substitute(translations))
 
 
-    """
-    Variable declaration
-    """
-    def build_variable_declaration(self, public, line_prefix, variable_name):
+    def build_variable_declaration(self, line_prefix, variable_name):
         built = ''
         for member in self.members:
-            built += member['object'].build_variable_declaration(public, line_prefix, variable_name + '_' + member['name'])
+            built += member['object'].build_variable_declaration(line_prefix, variable_name + '_' + member['name'])
         return built
 
 
-    """
-    The getter for a sequence variable will include independent getters for each
-    of the variables in the sequence.
-    """
+    def build_variable_declaration_gir(self, line_prefix, variable_name):
+        built = ''
+        for member in self.members:
+            built += member['object'].build_variable_declaration_gir(line_prefix, variable_name + '_' + member['name'])
+        return built
+
+
+    def build_struct_field_declaration(self, line_prefix, variable_name):
+        raise RuntimeError('Variable of type "sequence" is never expected as a struct field')
+
+
     def build_getter_declaration(self, line_prefix, variable_name):
         if not self.visible:
             return ""
@@ -141,9 +137,16 @@ class VariableSequence(Variable):
         return built
 
 
-    """
-    Documentation for the getter
-    """
+    def build_getter_declaration_gir(self, line_prefix, variable_name):
+        if not self.visible:
+            return ""
+
+        built = ''
+        for member in self.members:
+            built += member['object'].build_getter_declaration_gir(line_prefix, variable_name + '_' + member['name'])
+        return built
+
+
     def build_getter_documentation(self, line_prefix, variable_name):
         if not self.visible:
             return ""
@@ -154,10 +157,17 @@ class VariableSequence(Variable):
         return built
 
 
-    """
-    Builds the Struct getter implementation
-    """
-    def build_getter_implementation(self, line_prefix, variable_name_from, variable_name_to, to_is_reference):
+    def build_getter_documentation_gir(self, line_prefix, variable_name):
+        if not self.visible:
+            return ""
+
+        built = ''
+        for member in self.members:
+            built += member['object'].build_getter_documentation_gir(line_prefix, variable_name + '_' + member['name'])
+        return built
+
+
+    def build_getter_implementation(self, line_prefix, variable_name_from, variable_name_to):
         if not self.visible:
             return ""
 
@@ -165,15 +175,22 @@ class VariableSequence(Variable):
         for member in self.members:
             built += member['object'].build_getter_implementation(line_prefix,
                                                                   variable_name_from + '_' + member['name'],
-                                                                  variable_name_to + '_' + member['name'],
-                                                                  to_is_reference)
+                                                                  variable_name_to + '_' + member['name'])
         return built
 
 
-    """
-    The setter for a sequence variable will include independent setters for each
-    of the variables in the sequence.
-    """
+    def build_getter_implementation_gir(self, line_prefix, variable_name_from, variable_name_to):
+        if not self.visible:
+            return ""
+
+        built = ''
+        for member in self.members:
+            built += member['object'].build_getter_implementation_gir(line_prefix,
+                                                                      variable_name_from + '_' + member['name'],
+                                                                      variable_name_to + '_' + member['name'])
+        return built
+
+
     def build_setter_declaration(self, line_prefix, variable_name):
         if not self.visible:
             return ""
@@ -184,9 +201,16 @@ class VariableSequence(Variable):
         return built
 
 
-    """
-    Documentation for the setter
-    """
+    def build_setter_declaration_gir(self, line_prefix, variable_name):
+        if not self.visible:
+            return ""
+
+        built = ''
+        for member in self.members:
+            built += member['object'].build_setter_declaration_gir(line_prefix, variable_name + '_' + member['name'])
+        return built
+
+
     def build_setter_documentation(self, line_prefix, variable_name):
         if not self.visible:
             return ""
@@ -197,9 +221,16 @@ class VariableSequence(Variable):
         return built
 
 
-    """
-    Builds the Sequence setter implementation
-    """
+    def build_setter_documentation_gir(self, line_prefix, variable_name):
+        if not self.visible:
+            return ""
+
+        built = ''
+        for member in self.members:
+            built += member['object'].build_setter_documentation_gir(line_prefix, variable_name + '_' + member['name'])
+        return built
+
+
     def build_setter_implementation(self, line_prefix, variable_name_from, variable_name_to):
         if not self.visible:
             return ""
@@ -212,10 +243,18 @@ class VariableSequence(Variable):
         return built
 
 
-    """
-    Disposing a sequence is just about disposing each of the sequence fields one by
-    one.
-    """
+    def build_setter_implementation_gir(self, line_prefix, variable_name_from, variable_name_to):
+        if not self.visible:
+            return ""
+
+        built = ''
+        for member in self.members:
+            built += member['object'].build_setter_implementation_gir(line_prefix,
+                                                                      variable_name_from + '_' + member['name'],
+                                                                      variable_name_to + '_' + member['name'])
+        return built
+
+
     def build_dispose(self, line_prefix, variable_name):
         built = ''
         for member in self.members:
@@ -223,9 +262,34 @@ class VariableSequence(Variable):
         return built
 
 
-    """
-    Add sections
-    """
+    def build_dispose_gir(self, line_prefix, variable_name):
+        built = ''
+        for member in self.members:
+            built += member['object'].build_dispose_gir(line_prefix, variable_name + '_' + member['name'])
+        return built
+
+
+    def build_copy_to_gir(self, line_prefix, variable_name_from, variable_name_to):
+        built = ''
+        for member in self.members:
+            built += member['object'].build_copy_to_gir(line_prefix, variable_name_from, variable_name_to)
+        return built
+
+
+    def build_copy_from_gir(self, line_prefix, variable_name_from, variable_name_to):
+        built = ''
+        for member in self.members:
+            built += member['object'].build_copy_from_gir(line_prefix, variable_name_from, variable_name_to)
+        return built
+
+
+    def build_copy_gir(self, line_prefix, variable_name_from, variable_name_to):
+        built = ''
+        for member in self.members:
+            built += member['object'].build_copy_gir(line_prefix, variable_name_from, variable_name_to)
+        return built
+
+
     def add_sections(self, sections):
         # Add sections for each member
         for member in self.members:

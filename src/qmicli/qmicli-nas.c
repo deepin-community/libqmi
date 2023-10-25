@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc.
  */
 
 #include "config.h"
@@ -35,6 +36,9 @@
 
 #if defined HAVE_QMI_SERVICE_NAS
 
+#undef VALIDATE_MASK_NONE
+#define VALIDATE_MASK_NONE(str) (str ? str : "none")
+
 /* Context */
 typedef struct {
     QmiDevice *device;
@@ -51,14 +55,18 @@ static gboolean get_home_network_flag;
 static gboolean get_serving_system_flag;
 static gboolean get_system_info_flag;
 static gboolean get_technology_preference_flag;
+static gboolean get_preferred_networks_flag;
+static gchar *set_preferred_networks_str;
 static gboolean get_system_selection_preference_flag;
 static gchar *set_system_selection_preference_str;
+static gchar *get_plmn_name_str;
 static gboolean network_scan_flag;
 static gboolean get_cell_location_info_flag;
 static gboolean force_network_search_flag;
 static gboolean get_operator_name_flag;
 static gboolean get_lte_cphy_ca_info_flag;
 static gboolean get_rf_band_info_flag;
+static gboolean get_drx_flag;
 static gboolean get_supported_messages_flag;
 static gboolean swi_get_status_flag;
 static gboolean reset_flag;
@@ -107,6 +115,18 @@ static GOptionEntry entries[] = {
       NULL
     },
 #endif
+#if defined HAVE_QMI_MESSAGE_NAS_GET_PREFERRED_NETWORKS
+    { "nas-get-preferred-networks", 0, 0, G_OPTION_ARG_NONE, &get_preferred_networks_flag,
+      "Get preferred networks",
+      NULL
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_NAS_SET_PREFERRED_NETWORKS
+    { "nas-set-preferred-networks", 0, 0, G_OPTION_ARG_STRING, &set_preferred_networks_str,
+      "Set preferred networks list",
+      "[[MCCMNC,access_tech],...]"
+    },
+#endif
 #if defined HAVE_QMI_MESSAGE_NAS_GET_SYSTEM_SELECTION_PREFERENCE
     { "nas-get-system-selection-preference", 0, 0, G_OPTION_ARG_NONE, &get_system_selection_preference_flag,
       "Get system selection preference",
@@ -143,6 +163,12 @@ static GOptionEntry entries[] = {
       NULL
     },
 #endif
+#if defined HAVE_QMI_MESSAGE_NAS_GET_PLMN_NAME
+    { "nas-get-plmn-name", 0, 0, G_OPTION_ARG_STRING, &get_plmn_name_str,
+      "Get plmn name data",
+      "[mccmnc]"
+    },
+#endif
 #if defined HAVE_QMI_MESSAGE_NAS_GET_LTE_CPHY_CA_INFO
     { "nas-get-lte-cphy-ca-info", 0, 0, G_OPTION_ARG_NONE, &get_lte_cphy_ca_info_flag,
       "Get LTE Cphy CA Info",
@@ -152,6 +178,12 @@ static GOptionEntry entries[] = {
 #if defined HAVE_QMI_MESSAGE_NAS_GET_RF_BAND_INFORMATION
     { "nas-get-rf-band-info", 0, 0, G_OPTION_ARG_NONE, &get_rf_band_info_flag,
       "Get RF Band Info",
+      NULL
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_NAS_GET_DRX
+    { "nas-get-drx", 0, 0, G_OPTION_ARG_NONE, &get_drx_flag,
+      "Get DRX",
       NULL
     },
 #endif
@@ -177,7 +209,7 @@ static GOptionEntry entries[] = {
       "Just allocate or release a NAS client. Use with `--client-no-release-cid' and/or `--client-cid'",
       NULL
     },
-    { NULL }
+    { NULL, 0, 0, 0, NULL, NULL, NULL }
 };
 
 GOptionGroup *
@@ -211,14 +243,18 @@ qmicli_nas_options_enabled (void)
                  get_serving_system_flag +
                  get_system_info_flag +
                  get_technology_preference_flag +
+                 get_preferred_networks_flag +
+                 !!set_preferred_networks_str +
                  get_system_selection_preference_flag +
                  !!set_system_selection_preference_str +
+                 !!get_plmn_name_str +
                  network_scan_flag +
                  get_cell_location_info_flag +
                  force_network_search_flag +
                  get_operator_name_flag +
                  get_lte_cphy_ca_info_flag +
                  get_rf_band_info_flag +
+                 get_drx_flag +
                  get_supported_messages_flag +
                  swi_get_status_flag +
                  reset_flag +
@@ -318,6 +354,7 @@ get_signal_info_ready (QmiClientNas *client,
     gint16 rsrp;
     gint16 snr;
     gint8 rscp;
+    gint16 wcdma_rscp;
     gint16 rsrq_5g;
     gint32 rssi_tdma;
     gint32 rscp_tdma;
@@ -399,6 +436,14 @@ get_signal_info_ready (QmiClientNas *client,
                  (-0.5)*((gdouble)ecio));
     }
 
+    /* WCDMA Signal Code Power... */
+    if (qmi_message_nas_get_signal_info_output_get_wcdma_rscp (output,
+                                                               &wcdma_rscp,
+                                                               NULL)) {
+        g_print ("\tRSCP: '%d dBm'\n",
+                 (-1)*wcdma_rscp);
+    }
+
     /* LTE... */
     if (qmi_message_nas_get_signal_info_output_get_lte_signal_strength (output,
                                                                         &rssi,
@@ -448,19 +493,26 @@ get_signal_info_ready (QmiClientNas *client,
                                                                        &rsrp,
                                                                        &snr,
                                                                        NULL)) {
-        g_print ("5G:\n"
-                 "\tRSRP: '%d dBm'\n"
-                 "\tSNR: '%.1lf dB'\n",
-                 rsrp,
-                 (0.1) * ((gdouble)snr));
+        g_print ("5G:\n");
+        if (rsrp == (gint16)(0x8000))
+            g_print ("\tRSRP: 'n/a'\n");
+        else
+            g_print ("\tRSRP: '%d dBm'\n", rsrp);
+        if (snr == (gint16)(0x8000))
+            g_print ("\tSNR: 'n/a'\n");
+        else
+            g_print ("\tSNR: '%.1lf dB'\n", (0.1) * ((gdouble)snr));
     }
 
     /* 5G extended... */
     if (qmi_message_nas_get_signal_info_output_get_5g_signal_strength_extended (output,
                                                                                 &rsrq_5g,
                                                                                 NULL)) {
-        g_print ("\tRSRQ: '%d dB'\n",
-                 rsrq_5g);
+        if (rsrq_5g == (gint16)(0x8000))
+            g_print ("\tRSRQ: 'n/a'\n");
+        else
+            g_print ("\tRSRQ: '%d dB'\n",
+                     rsrq_5g);
     }
 
     qmi_message_nas_get_signal_info_output_unref (output);
@@ -753,6 +805,84 @@ get_tx_rx_info_ready (QmiClientNas *client,
         }
     }
 
+    /* RX Channel 2 */
+    if (qmi_message_nas_get_tx_rx_info_output_get_rx_chain_2_info (
+            output,
+            &is_radio_tuned,
+            &power,
+            &ecio,
+            &rscp,
+            &rsrp,
+            &phase,
+            NULL)) {
+        g_print ("RX Chain 2:\n"
+                 "\tRadio tuned: '%s'\n"
+                 "\tPower: '%.1lf dBm'\n",
+                 is_radio_tuned ? "yes" : "no",
+                 (0.1) * ((gdouble)power));
+        if (interface == QMI_NAS_RADIO_INTERFACE_CDMA_1X ||
+            interface == QMI_NAS_RADIO_INTERFACE_CDMA_1XEVDO ||
+            interface == QMI_NAS_RADIO_INTERFACE_GSM ||
+            interface == QMI_NAS_RADIO_INTERFACE_UMTS ||
+            interface == QMI_NAS_RADIO_INTERFACE_LTE ||
+            interface == QMI_NAS_RADIO_INTERFACE_5GNR)
+            g_print ("\tECIO: '%.1lf dB'\n", (0.1) * ((gdouble)ecio));
+
+        if (interface == QMI_NAS_RADIO_INTERFACE_UMTS)
+            g_print ("\tRSCP: '%.1lf dBm'\n", (0.1) * ((gdouble)rscp));
+
+        if (interface == QMI_NAS_RADIO_INTERFACE_LTE ||
+            interface == QMI_NAS_RADIO_INTERFACE_5GNR)
+            g_print ("\tRSRP: '%.1lf dBm'\n", (0.1) * ((gdouble)rsrp));
+
+        if (interface == QMI_NAS_RADIO_INTERFACE_LTE ||
+            interface == QMI_NAS_RADIO_INTERFACE_5GNR) {
+            if (phase == 0xFFFFFFFF)
+                g_print ("\tPhase: 'unknown'\n");
+            else
+                g_print ("\tPhase: '%.2lf degrees'\n", (0.01) * ((gdouble)phase));
+        }
+    }
+
+    /* RX Channel 3 */
+    if (qmi_message_nas_get_tx_rx_info_output_get_rx_chain_3_info (
+            output,
+            &is_radio_tuned,
+            &power,
+            &ecio,
+            &rscp,
+            &rsrp,
+            &phase,
+            NULL)) {
+        g_print ("RX Chain 3:\n"
+                 "\tRadio tuned: '%s'\n"
+                 "\tPower: '%.1lf dBm'\n",
+                 is_radio_tuned ? "yes" : "no",
+                 (0.1) * ((gdouble)power));
+        if (interface == QMI_NAS_RADIO_INTERFACE_CDMA_1X ||
+            interface == QMI_NAS_RADIO_INTERFACE_CDMA_1XEVDO ||
+            interface == QMI_NAS_RADIO_INTERFACE_GSM ||
+            interface == QMI_NAS_RADIO_INTERFACE_UMTS ||
+            interface == QMI_NAS_RADIO_INTERFACE_LTE ||
+            interface == QMI_NAS_RADIO_INTERFACE_5GNR)
+            g_print ("\tECIO: '%.1lf dB'\n", (0.1) * ((gdouble)ecio));
+
+        if (interface == QMI_NAS_RADIO_INTERFACE_UMTS)
+            g_print ("\tRSCP: '%.1lf dBm'\n", (0.1) * ((gdouble)rscp));
+
+        if (interface == QMI_NAS_RADIO_INTERFACE_LTE ||
+            interface == QMI_NAS_RADIO_INTERFACE_5GNR)
+            g_print ("\tRSRP: '%.1lf dBm'\n", (0.1) * ((gdouble)rsrp));
+
+        if (interface == QMI_NAS_RADIO_INTERFACE_LTE ||
+            interface == QMI_NAS_RADIO_INTERFACE_5GNR) {
+            if (phase == 0xFFFFFFFF)
+                g_print ("\tPhase: 'unknown'\n");
+            else
+                g_print ("\tPhase: '%.2lf degrees'\n", (0.01) * ((gdouble)phase));
+        }
+    }
+
     /* TX Channel */
     if (qmi_message_nas_get_tx_rx_info_output_get_tx_info (
             output,
@@ -909,6 +1039,202 @@ get_home_network_ready (QmiClientNas *client,
 }
 
 #endif /* HAVE_QMI_MESSAGE_NAS_GET_HOME_NETWORK */
+
+#if defined HAVE_QMI_MESSAGE_NAS_GET_PREFERRED_NETWORKS
+
+static void
+get_preferred_networks_ready (QmiClientNas *client,
+                              GAsyncResult *res)
+{
+    QmiMessageNasGetPreferredNetworksOutput *output;
+    GError *error = NULL;
+    GArray *preferred_networks_array;
+    GArray *pcs_digit_array;
+
+    output = qmi_client_nas_get_preferred_networks_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        g_error_free (error);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_nas_get_preferred_networks_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't get preferred networks: %s\n", error->message);
+        g_error_free (error);
+        qmi_message_nas_get_preferred_networks_output_unref (output);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("[%s] Successfully got preferred networks:\n",
+             qmi_device_get_path_display (ctx->device));
+
+    if (qmi_message_nas_get_preferred_networks_output_get_preferred_networks (output, &preferred_networks_array, NULL)) {
+        guint i;
+
+        g_print ("Preferred PLMN list:\n");
+        if (preferred_networks_array->len == 0)
+            g_print ("\t<empty>\n");
+        for (i = 0; i < preferred_networks_array->len; i++) {
+            QmiMessageNasGetPreferredNetworksOutputPreferredNetworksElement *element;
+            g_autofree gchar *access_tech_string = NULL;
+
+            element = &g_array_index (preferred_networks_array, QmiMessageNasGetPreferredNetworksOutputPreferredNetworksElement, i);
+            access_tech_string = qmi_nas_plmn_access_technology_identifier_build_string_from_mask (element->radio_access_technology);
+            g_print ("[%u]:\n"
+                     "\tMCC: '%" G_GUINT16_FORMAT "'\n"
+                     "\tMNC: '%" G_GUINT16_FORMAT "'\n"
+                     "\tAccess Technology: '%s'\n",
+                     i,
+                     element->mcc,
+                     element->mnc,
+                     VALIDATE_MASK_NONE (access_tech_string));
+        }
+    }
+
+    if (qmi_message_nas_get_preferred_networks_output_get_mnc_pcs_digit_include_status (output, &pcs_digit_array, NULL)) {
+        guint i;
+
+        g_print ("PCS digit status:\n");
+        if (pcs_digit_array->len == 0)
+            g_print ("\t<empty>\n");
+        for (i = 0; i < pcs_digit_array->len; i++) {
+            QmiMessageNasGetPreferredNetworksOutputMncPcsDigitIncludeStatusElement *element;
+
+            element = &g_array_index (pcs_digit_array, QmiMessageNasGetPreferredNetworksOutputMncPcsDigitIncludeStatusElement, i);
+            g_print ("[%u]:\n"
+                     "\tMCC: '%" G_GUINT16_FORMAT "'\n"
+                     "\tMNC: '%" G_GUINT16_FORMAT "'\n"
+                     "\tMCC with PCS digit: '%s'\n",
+                     i,
+                     element->mcc,
+                     element->mnc,
+                     element->includes_pcs_digit ? "yes" : "no");
+        }
+    }
+
+    qmi_message_nas_get_preferred_networks_output_unref (output);
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_NAS_GET_PREFERRED_NETWORKS */
+
+#if defined HAVE_QMI_MESSAGE_NAS_SET_PREFERRED_NETWORKS
+
+static QmiMessageNasSetPreferredNetworksInput *
+set_preferred_networks_input_create (const gchar *str)
+{
+    QmiMessageNasSetPreferredNetworksInput *input = NULL;
+    GError                                 *error = NULL;
+    gchar                                 **parts = NULL;
+    gint                                    i;
+    gint                                    num_parts;
+    const gchar                            *part;
+    guint16                                 mcc = 0;
+    guint16                                 mnc = 0;
+    gboolean                                pcs_digit = FALSE;
+    QmiNasPlmnAccessTechnologyIdentifier    access_tech = QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_UNSPECIFIED;
+    GArray                                 *preferred_nets_array;
+    GArray                                 *pcs_digit_array;
+    QmiMessageNasSetPreferredNetworksInputPreferredNetworksElement        preferred_nets_element;
+    QmiMessageNasSetPreferredNetworksInputMncPcsDigitIncludeStatusElement pcs_digit_element;
+
+    preferred_nets_array = g_array_new (FALSE, FALSE, sizeof (QmiMessageNasSetPreferredNetworksInputPreferredNetworksElement));
+    pcs_digit_array = g_array_new (FALSE, FALSE, sizeof (QmiMessageNasSetPreferredNetworksInputMncPcsDigitIncludeStatusElement));
+
+    parts = g_strsplit (str, ",", -1);
+    num_parts = g_strv_length (parts);
+    for (i = 0; i < num_parts; i += 2) {
+        part = parts[i];
+        /* Parse MCCMNC, if it's found, also read the access technology in numeric format */
+        if (qmicli_read_parse_3gpp_mcc_mnc (part, &mcc, &mnc, &pcs_digit)) {
+            access_tech = QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_UNSPECIFIED;
+            if (i + 1 < num_parts) {
+                const gchar *access_tech_str = parts[i + 1];
+
+                if (!qmicli_read_nas_plmn_access_technology_identifier_from_string (access_tech_str, &access_tech))
+                    goto out;
+
+                memset (&preferred_nets_element, 0, sizeof (preferred_nets_element));
+                preferred_nets_element.mcc = mcc;
+                preferred_nets_element.mnc = mnc;
+                preferred_nets_element.radio_access_technology = access_tech;
+                g_array_append_val (preferred_nets_array, preferred_nets_element);
+                memset (&pcs_digit_element, 0, sizeof (pcs_digit_element));
+                pcs_digit_element.mcc = mcc;
+                pcs_digit_element.mnc = mnc;
+                pcs_digit_element.includes_pcs_digit = pcs_digit;
+                g_array_append_val (pcs_digit_array, pcs_digit_element);
+            } else {
+                g_printerr ("error: access technology missing for MCCMNC: '%s'\n", part);
+                goto out;
+            }
+        } else
+            goto out;
+    }
+
+    input = qmi_message_nas_set_preferred_networks_input_new ();
+
+    if (!qmi_message_nas_set_preferred_networks_input_set_preferred_networks (input, preferred_nets_array, &error))
+        goto out;
+
+    if (!qmi_message_nas_set_preferred_networks_input_set_mnc_pcs_digit_include_status (input, pcs_digit_array, &error))
+        goto out;
+
+    /* Always set the clear previous flag, leaving any previously configured networks is not desired */
+    if (!qmi_message_nas_set_preferred_networks_input_set_clear_previous_preferred_networks (input, TRUE, &error))
+        goto out;
+
+out:
+    g_strfreev (parts);
+
+    if (preferred_nets_array)
+        g_array_unref (preferred_nets_array);
+    if (pcs_digit_array)
+        g_array_unref (pcs_digit_array);
+
+    if (error) {
+        g_printerr ("error: couldn't create preferred networks input data bundle: '%s'\n", error->message);
+        g_error_free (error);
+        qmi_message_nas_set_preferred_networks_input_unref (input);
+        return NULL;
+    }
+
+    return input;
+}
+
+static void
+set_preferred_networks_ready (QmiClientNas *client,
+                              GAsyncResult *res)
+{
+    QmiMessageNasSetPreferredNetworksOutput *output = NULL;
+    GError *error = NULL;
+
+    output = qmi_client_nas_set_preferred_networks_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        g_error_free (error);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_nas_set_preferred_networks_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't set preferred networks: %s\n", error->message);
+        g_error_free (error);
+        qmi_message_nas_set_preferred_networks_output_unref (output);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("[%s] Preferred networks set successfully.\n",
+             qmi_device_get_path_display (ctx->device));
+
+    qmi_message_nas_set_preferred_networks_output_unref (output);
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_NAS_SET_PREFERRED_NETWORKS */
 
 #if defined HAVE_QMI_MESSAGE_NAS_GET_SERVING_SYSTEM
 
@@ -1590,7 +1916,7 @@ get_system_info_ready (QmiClientNas *client,
         guint32 cid;
         gboolean registration_reject_info_valid;
         QmiNasNetworkServiceDomain registration_reject_domain;
-        guint8 registration_reject_cause;
+        QmiNasRejectCause registration_reject_cause;
         gboolean network_id_valid;
         const gchar *mcc;
         const gchar *mnc;
@@ -1618,7 +1944,7 @@ get_system_info_ready (QmiClientNas *client,
                      qmi_nas_service_status_get_string (true_service_status),
                      preferred_data_path ? "yes" : "no");
 
-            if (qmi_message_nas_get_system_info_output_get_gsm_system_info (
+            if (qmi_message_nas_get_system_info_output_get_gsm_system_info_v2 (
                     output,
                     &domain_valid, &domain,
                     &service_capability_valid, &service_capability,
@@ -1644,9 +1970,9 @@ get_system_info_ready (QmiClientNas *client,
                 if (cid_valid)
                     g_print ("\t\tCell ID: '%u'\n", cid);
                 if (registration_reject_info_valid)
-                    g_print ("\t\tRegistration reject: '%s' (%u)\n",
+                    g_print ("\t\tRegistration reject: '%s' (%s)\n",
                              qmi_nas_network_service_domain_get_string (registration_reject_domain),
-                             registration_reject_cause);
+                             qmi_nas_reject_cause_get_string (registration_reject_cause));
                 if (network_id_valid) {
                     g_print ("\t\tMCC: '%s'\n", mcc);
                     if ((guchar)mnc[2] == 0xFF)
@@ -1707,7 +2033,7 @@ get_system_info_ready (QmiClientNas *client,
         guint32 cid;
         gboolean registration_reject_info_valid;
         QmiNasNetworkServiceDomain registration_reject_domain;
-        guint8 registration_reject_cause;
+        QmiNasRejectCause registration_reject_cause;
         gboolean network_id_valid;
         const gchar *mcc;
         const gchar *mnc;
@@ -1737,7 +2063,7 @@ get_system_info_ready (QmiClientNas *client,
                      qmi_nas_service_status_get_string (true_service_status),
                      preferred_data_path ? "yes" : "no");
 
-            if (qmi_message_nas_get_system_info_output_get_wcdma_system_info (
+            if (qmi_message_nas_get_system_info_output_get_wcdma_system_info_v2 (
                     output,
                     &domain_valid, &domain,
                     &service_capability_valid, &service_capability,
@@ -1750,7 +2076,7 @@ get_system_info_ready (QmiClientNas *client,
                     &hs_call_status_valid, &hs_call_status,
                     &hs_service_valid, &hs_service,
                     &primary_scrambling_code_valid, &primary_scrambling_code,
-                NULL)) {
+                    NULL)) {
                 if (domain_valid)
                     g_print ("\t\tDomain: '%s'\n", qmi_nas_network_service_domain_get_string (domain));
                 if (service_capability_valid)
@@ -1764,9 +2090,9 @@ get_system_info_ready (QmiClientNas *client,
                 if (cid_valid)
                     g_print ("\t\tCell ID: '%u'\n", cid);
                 if (registration_reject_info_valid)
-                    g_print ("\t\tRegistration reject: '%s' (%u)\n",
+                    g_print ("\t\tRegistration reject: '%s' (%s)\n",
                              qmi_nas_network_service_domain_get_string (registration_reject_domain),
-                             registration_reject_cause);
+                             qmi_nas_reject_cause_get_string (registration_reject_cause));
                 if (network_id_valid) {
                     g_print ("\t\tMCC: '%s'\n", mcc);
                     if ((guchar)mnc[2] == 0xFF)
@@ -1829,7 +2155,7 @@ get_system_info_ready (QmiClientNas *client,
         guint32 cid;
         gboolean registration_reject_info_valid;
         QmiNasNetworkServiceDomain registration_reject_domain;
-        guint8 registration_reject_cause;
+        QmiNasRejectCause registration_reject_cause;
         gboolean network_id_valid;
         const gchar *mcc;
         const gchar *mnc;
@@ -1843,6 +2169,8 @@ get_system_info_ready (QmiClientNas *client,
         QmiNasNetworkSelectionRegistrationRestriction registration_restriction;
         QmiNasLteCellAccessStatus cell_access_status;
         QmiNasLteRegistrationDomain registration_domain;
+        gboolean endc_available;
+        gboolean restrict_dcnr;
 
         if (qmi_message_nas_get_system_info_output_get_lte_service_status (
                 output,
@@ -1858,7 +2186,7 @@ get_system_info_ready (QmiClientNas *client,
                      qmi_nas_service_status_get_string (true_service_status),
                      preferred_data_path ? "yes" : "no");
 
-            if (qmi_message_nas_get_system_info_output_get_lte_system_info (
+            if (qmi_message_nas_get_system_info_output_get_lte_system_info_v2 (
                     output,
                     &domain_valid, &domain,
                     &service_capability_valid, &service_capability,
@@ -1883,9 +2211,9 @@ get_system_info_ready (QmiClientNas *client,
                 if (cid_valid)
                     g_print ("\t\tCell ID: '%u'\n", cid);
                 if (registration_reject_info_valid)
-                    g_print ("\t\tRegistration reject: '%s' (%u)\n",
+                    g_print ("\t\tRegistration reject: '%s' (%s)\n",
                              qmi_nas_network_service_domain_get_string (registration_reject_domain),
-                             registration_reject_cause);
+                             qmi_nas_reject_cause_get_string (registration_reject_cause));
                 if (network_id_valid) {
                     g_print ("\t\tMCC: '%s'\n", mcc);
                     if ((guchar)mnc[2] == 0xFF)
@@ -1953,6 +2281,20 @@ get_system_info_ready (QmiClientNas *client,
                     NULL)) {
                 g_print ("\t\tRegistration domain: '%s'\n", qmi_nas_lte_registration_domain_get_string (registration_domain));
             }
+
+            if (qmi_message_nas_get_system_info_output_get_eutra_with_nr5g_availability (
+                    output,
+                    &endc_available,
+                    NULL)) {
+                g_print ("\t\t5G NSA Available: '%s'\n", endc_available ? "yes" : "no");
+            }
+
+            if (qmi_message_nas_get_system_info_output_get_dcnr_restriction_info (
+                    output,
+                    &restrict_dcnr,
+                    NULL)) {
+                g_print ("\t\tDCNR Restriction: '%s'\n", restrict_dcnr ? "yes" : "no");
+            }
         }
     }
 
@@ -1975,7 +2317,7 @@ get_system_info_ready (QmiClientNas *client,
         guint32 cid;
         gboolean registration_reject_info_valid;
         QmiNasNetworkServiceDomain registration_reject_domain;
-        guint8 registration_reject_cause;
+        QmiNasRejectCause registration_reject_cause;
         gboolean network_id_valid;
         const gchar *mcc;
         const gchar *mnc;
@@ -2008,7 +2350,7 @@ get_system_info_ready (QmiClientNas *client,
                      qmi_nas_service_status_get_string (true_service_status),
                      preferred_data_path ? "yes" : "no");
 
-            if (qmi_message_nas_get_system_info_output_get_td_scdma_system_info (
+            if (qmi_message_nas_get_system_info_output_get_td_scdma_system_info_v2 (
                     output,
                     &domain_valid, &domain,
                     &service_capability_valid, &service_capability,
@@ -2039,9 +2381,9 @@ get_system_info_ready (QmiClientNas *client,
                 if (cid_valid)
                     g_print ("\t\tCell ID: '%u'\n", cid);
                 if (registration_reject_info_valid)
-                    g_print ("\t\tRegistration reject: '%s' (%u)\n",
+                    g_print ("\t\tRegistration reject: '%s' (%s)\n",
                              qmi_nas_network_service_domain_get_string (registration_reject_domain),
-                             registration_reject_cause);
+                             qmi_nas_reject_cause_get_string (registration_reject_cause));
                 if (network_id_valid) {
                     g_print ("\t\tMCC: '%s'\n", mcc);
                     if ((guchar)mnc[2] == 0xFF)
@@ -2065,17 +2407,117 @@ get_system_info_ready (QmiClientNas *client,
                     g_print ("\t\tCipher Domain: '%s'\n", qmi_nas_network_service_domain_get_string (cipher_domain));
             }
         }
+    }
 
-        /* Common */
-        {
-            QmiNasSimRejectState sim_reject_info;
+    /* 5G SA */
+    {
+        QmiNasServiceStatus service_status;
+        QmiNasServiceStatus true_service_status;
+        gboolean preferred_data_path;
+        gboolean domain_valid;
+        QmiNasNetworkServiceDomain domain;
+        gboolean service_capability_valid;
+        QmiNasNetworkServiceDomain service_capability;
+        gboolean roaming_status_valid;
+        QmiNasRoamingStatus roaming_status;
+        gboolean forbidden_valid;
+        gboolean forbidden;
+        gboolean lac_valid;
+        guint16 lac;
+        gboolean cid_valid;
+        guint32 cid;
+        gboolean registration_reject_info_valid;
+        QmiNasNetworkServiceDomain registration_reject_domain;
+        guint8 registration_reject_cause;
+        gboolean network_id_valid;
+        const gchar *mcc;
+        const gchar *mnc;
+        gboolean tac_valid;
+        guint16 tac;
 
-            if (qmi_message_nas_get_system_info_output_get_sim_reject_info (
+        if (qmi_message_nas_get_system_info_output_get_nr5g_service_status_info (
+                output,
+                &service_status,
+                &true_service_status,
+                &preferred_data_path,
+                NULL)) {
+            g_print ("\t5G SA service:\n"
+                     "\t\tStatus: '%s'\n"
+                     "\t\tTrue Status: '%s'\n"
+                     "\t\tPreferred data path: '%s'\n",
+                     qmi_nas_service_status_get_string (service_status),
+                     qmi_nas_service_status_get_string (true_service_status),
+                     preferred_data_path ? "yes" : "no");
+
+            if (qmi_message_nas_get_system_info_output_get_nr5g_system_info (
                     output,
-                    &sim_reject_info,
+                    &domain_valid, &domain,
+                    &service_capability_valid, &service_capability,
+                    &roaming_status_valid, &roaming_status,
+                    &forbidden_valid, &forbidden,
+                    &lac_valid, &lac,
+                    &cid_valid, &cid,
+                    &registration_reject_info_valid,&registration_reject_domain,&registration_reject_cause,
+                    &network_id_valid, &mcc, &mnc,
+                    &tac_valid, &tac,
                     NULL)) {
-                g_print ("\tSIM reject info: '%s'\n", qmi_nas_sim_reject_state_get_string (sim_reject_info));
+                if (domain_valid)
+                    g_print ("\t\tDomain: '%s'\n", qmi_nas_network_service_domain_get_string (domain));
+                if (service_capability_valid)
+                    g_print ("\t\tService capability: '%s'\n", qmi_nas_network_service_domain_get_string (service_capability));
+                if (roaming_status_valid)
+                    g_print ("\t\tRoaming status: '%s'\n", qmi_nas_roaming_status_get_string (roaming_status));
+                if (forbidden_valid)
+                    g_print ("\t\tForbidden: '%s'\n", forbidden ? "yes" : "no");
+                if (lac_valid)
+                    g_print ("\t\tLocation Area Code: '%" G_GUINT16_FORMAT"'\n", lac);
+                if (cid_valid)
+                    g_print ("\t\tCell ID: '%u'\n", cid);
+                if (registration_reject_info_valid)
+                    g_print ("\t\tRegistration reject: '%s' (%u)\n",
+                             qmi_nas_network_service_domain_get_string (registration_reject_domain),
+                             registration_reject_cause);
+                if (network_id_valid) {
+                    g_print ("\t\tMCC: '%s'\n", mcc);
+                    if ((guchar)mnc[2] == 0xFF)
+                        g_print ("\t\tMNC: '%.2s'\n", mnc);
+                    else
+                        g_print ("\t\tMNC: '%.3s'\n", mnc);
+                }
+                if (tac_valid)
+                    g_print ("\t\tTracking Area Code: '%" G_GUINT16_FORMAT"'\n", tac);
             }
+        }
+    }
+
+    {
+        GArray *nr5g_tracking_area_code;
+
+        if (qmi_message_nas_get_system_info_output_get_nr5g_tracking_area_code (
+            output,
+            &nr5g_tracking_area_code,
+            NULL)) {
+            guint32           tac;
+
+            g_assert (nr5g_tracking_area_code->len == 3);
+            tac = ((((g_array_index (nr5g_tracking_area_code, guint8, 0) << 8) |
+                     g_array_index (nr5g_tracking_area_code, guint8, 1)) << 8) |
+                   g_array_index (nr5g_tracking_area_code, guint8, 2));
+
+            g_print ("\t5GNR Tracking Area Code: '%" G_GUINT32_FORMAT "'\n",
+                     tac);
+        }
+    }
+
+    /* Common */
+    {
+        QmiNasSimRejectState sim_reject_info;
+
+        if (qmi_message_nas_get_system_info_output_get_sim_reject_info (
+                output,
+                &sim_reject_info,
+                NULL)) {
+            g_print ("\tSIM reject info: '%s'\n", qmi_nas_sim_reject_state_get_string (sim_reject_info));
         }
     }
 
@@ -2095,7 +2537,8 @@ get_technology_preference_ready (QmiClientNas *client,
     GError *error = NULL;
     QmiNasRadioTechnologyPreference preference;
     QmiNasPreferenceDuration duration;
-    gchar *preference_string;
+    g_autofree gchar *preference_string = NULL;
+    g_autofree gchar *persistent_preference_string = NULL;
 
     output = qmi_client_nas_get_technology_preference_finish (client, res, &error);
     if (!output) {
@@ -2123,18 +2566,15 @@ get_technology_preference_ready (QmiClientNas *client,
     g_print ("[%s] Successfully got technology preference\n"
              "\tActive: '%s', duration: '%s'\n",
              qmi_device_get_path_display (ctx->device),
-             preference_string,
+             VALIDATE_MASK_NONE (preference_string),
              qmi_nas_preference_duration_get_string (duration));
-    g_free (preference_string);
 
     if (qmi_message_nas_get_technology_preference_output_get_persistent (
             output,
             &preference,
             NULL)) {
-        preference_string = qmi_nas_radio_technology_preference_build_string_from_mask (preference);
-        g_print ("\tPersistent: '%s'\n",
-                 preference_string);
-        g_free (preference_string);
+        persistent_preference_string = qmi_nas_radio_technology_preference_build_string_from_mask (preference);
+        g_print ("\tPersistent: '%s'\n", VALIDATE_MASK_NONE (persistent_preference_string));
     }
 
     qmi_message_nas_get_technology_preference_output_unref (output);
@@ -2168,6 +2608,8 @@ get_system_selection_preference_ready (QmiClientNas *client,
     guint16 mcc;
     guint16 mnc;
     guint64 extended_lte_band_preference[4];
+    guint64 nr5g_sa_band_preference[8];
+    guint64 nr5g_nsa_band_preference[8];
     gboolean has_pcs_digit;
     GArray *acquisition_order_preference;
 
@@ -2202,22 +2644,20 @@ get_system_selection_preference_ready (QmiClientNas *client,
             output,
             &mode_preference,
             NULL)) {
-        gchar *str;
+        g_autofree gchar *str = NULL;
 
         str = qmi_nas_rat_mode_preference_build_string_from_mask (mode_preference);
-        g_print ("\tMode preference: '%s'\n", str);
-        g_free (str);
+        g_print ("\tMode preference: '%s'\n", VALIDATE_MASK_NONE (str));
     }
 
     if (qmi_message_nas_get_system_selection_preference_output_get_disabled_modes (
             output,
             &disabled_modes,
             NULL)) {
-        gchar *str;
+        g_autofree gchar *str = NULL;
 
         str = qmi_nas_rat_mode_preference_build_string_from_mask (disabled_modes);
-        g_print ("\tDisabled modes: '%s'\n", str);
-        g_free (str);
+        g_print ("\tDisabled modes: '%s'\n", VALIDATE_MASK_NONE (str));
     }
 
 
@@ -2225,22 +2665,20 @@ get_system_selection_preference_ready (QmiClientNas *client,
             output,
             &band_preference,
             NULL)) {
-        gchar *str;
+        g_autofree gchar *str = NULL;
 
         str = qmi_nas_band_preference_build_string_from_mask (band_preference);
-        g_print ("\tBand preference: '%s'\n", str);
-        g_free (str);
+        g_print ("\tBand preference: '%s'\n", VALIDATE_MASK_NONE (str));
     }
 
     if (qmi_message_nas_get_system_selection_preference_output_get_lte_band_preference (
             output,
             &lte_band_preference,
             NULL)) {
-        gchar *str;
+        g_autofree gchar *str = NULL;
 
         str = qmi_nas_lte_band_preference_build_string_from_mask (lte_band_preference);
-        g_print ("\tLTE band preference: '%s'\n", str);
-        g_free (str);
+        g_print ("\tLTE band preference: '%s'\n", VALIDATE_MASK_NONE (str));
     }
 
     if (qmi_message_nas_get_system_selection_preference_output_get_extended_lte_band_preference (
@@ -2273,15 +2711,82 @@ get_system_selection_preference_ready (QmiClientNas *client,
         g_print ("'\n");
     }
 
+    if (qmi_message_nas_get_system_selection_preference_output_get_nr5g_sa_band_preference (
+            output,
+            &nr5g_sa_band_preference[0],
+            &nr5g_sa_band_preference[1],
+            &nr5g_sa_band_preference[2],
+            &nr5g_sa_band_preference[3],
+            &nr5g_sa_band_preference[4],
+            &nr5g_sa_band_preference[5],
+            &nr5g_sa_band_preference[6],
+            &nr5g_sa_band_preference[7],
+            NULL)) {
+        guint    i;
+        gboolean first = TRUE;
+
+        g_print ("\tNR5G SA band preference: '");
+        for (i = 0; i < G_N_ELEMENTS (nr5g_sa_band_preference); i++) {
+            guint j;
+
+            for (j = 0; j < 64; j++) {
+                guint band;
+
+                if (!(nr5g_sa_band_preference[i] & (((guint64) 1) << j)))
+                    continue;
+                band = 1 + j + (i * 64);
+                if (first) {
+                    g_print ("%u", band);
+                    first = FALSE;
+                } else
+                    g_print (", %u", band);
+            }
+        }
+        g_print ("'\n");
+    }
+
+    if (qmi_message_nas_get_system_selection_preference_output_get_nr5g_nsa_band_preference (
+            output,
+            &nr5g_nsa_band_preference[0],
+            &nr5g_nsa_band_preference[1],
+            &nr5g_nsa_band_preference[2],
+            &nr5g_nsa_band_preference[3],
+            &nr5g_nsa_band_preference[4],
+            &nr5g_nsa_band_preference[5],
+            &nr5g_nsa_band_preference[6],
+            &nr5g_nsa_band_preference[7],
+            NULL)) {
+        guint    i;
+        gboolean first = TRUE;
+
+        g_print ("\tNR5G NSA band preference: '");
+        for (i = 0; i < G_N_ELEMENTS (nr5g_nsa_band_preference); i++) {
+            guint j;
+
+            for (j = 0; j < 64; j++) {
+                guint band;
+
+                if (!(nr5g_nsa_band_preference[i] & (((guint64) 1) << j)))
+                    continue;
+                band = 1 + j + (i * 64);
+                if (first) {
+                    g_print ("%u", band);
+                    first = FALSE;
+                } else
+                    g_print (", %u", band);
+            }
+        }
+        g_print ("'\n");
+    }
+
     if (qmi_message_nas_get_system_selection_preference_output_get_td_scdma_band_preference (
             output,
             &td_scdma_band_preference,
             NULL)) {
-        gchar *str;
+        g_autofree gchar *str = NULL;
 
         str = qmi_nas_td_scdma_band_preference_build_string_from_mask (td_scdma_band_preference);
-        g_print ("\tTD-SCDMA band preference: '%s'\n", str);
-        g_free (str);
+        g_print ("\tTD-SCDMA band preference: '%s'\n", VALIDATE_MASK_NONE (str));
     }
 
     if (qmi_message_nas_get_system_selection_preference_output_get_cdma_prl_preference (
@@ -2370,7 +2875,7 @@ get_system_selection_preference_ready (QmiClientNas *client,
             NULL)) {
         guint i;
 
-        g_print ("\tAcquisition order preference: ");
+        g_print ("\tAcquisition order preference: '");
         for (i = 0; i < acquisition_order_preference->len; i++) {
             QmiNasRadioInterface radio_interface;
 
@@ -2379,7 +2884,7 @@ get_system_selection_preference_ready (QmiClientNas *client,
                      i > 0 ? ", " : "",
                      qmi_nas_radio_interface_get_string (radio_interface));
         }
-        g_print ("\n");
+        g_print ("'\n");
     }
 
     qmi_message_nas_get_system_selection_preference_output_unref (output);
@@ -2541,7 +3046,7 @@ network_scan_ready (QmiClientNas *client,
 
         for (i = 0; i < array->len; i++) {
             QmiMessageNasNetworkScanOutputNetworkInformationElement *element;
-            gchar *status_str;
+            g_autofree gchar *status_str = NULL;
 
             element = &g_array_index (array, QmiMessageNasNetworkScanOutputNetworkInformationElement, i);
             status_str = qmi_nas_network_status_build_string_from_mask (element->network_status);
@@ -2553,9 +3058,8 @@ network_scan_ready (QmiClientNas *client,
                      i,
                      element->mcc,
                      element->mnc,
-                     status_str,
+                     VALIDATE_MASK_NONE (status_str),
                      element->description);
-            g_free (status_str);
         }
     }
 
@@ -2677,6 +3181,18 @@ get_cell_location_info_ready (QmiClientNas *client,
     guint8 s_intra_search_threshold;
 
     QmiNasWcdmaRrcState rrc_state;
+
+    guint32 lte_timing_advance;
+
+    guint32 nr5g_arfcn;
+
+    GArray  *nr5g_cell_information_plmn;
+    GArray  *nr5g_cell_information_tac;
+    guint64  nr5g_cell_information_global_cell_id;
+    guint16  nr5g_cell_information_physical_cell_id;
+    gint16   nr5g_cell_information_rsrp;
+    gint16   nr5g_cell_information_rsrq;
+    gint16   nr5g_cell_information_snr;
 
     output = qmi_client_nas_get_cell_location_info_finish (client, res, &error);
     if (!output) {
@@ -3148,6 +3664,60 @@ get_cell_location_info_ready (QmiClientNas *client,
         }
     }
 
+    if (qmi_message_nas_get_cell_location_info_output_get_lte_info_timing_advance (
+            output,
+            &lte_timing_advance,
+            NULL)) {
+        if (lte_timing_advance == 0xFFFFFFFF)
+            g_print ("LTE Timing Advance: 'unavailable'\n");
+        else
+            g_print ("LTE Timing Advance: '%" G_GUINT32_FORMAT"' us\n", lte_timing_advance);
+    }
+
+    if (qmi_message_nas_get_cell_location_info_output_get_nr5g_arfcn (
+            output,
+            &nr5g_arfcn,
+            NULL)) {
+        g_print ("5GNR ARFCN: '%" G_GUINT32_FORMAT"'\n", nr5g_arfcn);
+    }
+
+    if (qmi_message_nas_get_cell_location_info_output_get_nr5g_cell_information (
+            output,
+            &nr5g_cell_information_plmn,
+            &nr5g_cell_information_tac,
+            &nr5g_cell_information_global_cell_id,
+            &nr5g_cell_information_physical_cell_id,
+            &nr5g_cell_information_rsrq,
+            &nr5g_cell_information_rsrp,
+            &nr5g_cell_information_snr,
+            NULL)) {
+        g_autofree gchar *plmn = NULL;
+        guint32           tac;
+
+        plmn = str_from_bcd_plmn (nr5g_cell_information_plmn);
+
+        g_assert (nr5g_cell_information_tac->len == 3);
+        tac = ((((g_array_index (nr5g_cell_information_tac, guint8, 0) << 8) |
+                 g_array_index (nr5g_cell_information_tac, guint8, 1)) << 8) |
+               g_array_index (nr5g_cell_information_tac, guint8, 2));
+
+        g_print ("5GNR cell information\n"
+                 "\tPLMN: '%s'\n"
+                 "\tTracking Area Code: '%" G_GUINT32_FORMAT "'\n"
+                 "\tGlobal Cell ID: '%" G_GUINT64_FORMAT "'\n"
+                 "\tPhysical Cell ID: '%" G_GUINT16_FORMAT "'\n"
+                 "\tRSRQ: '%.1lf dB'\n"
+                 "\tRSRP: '%.1lf dBm'\n"
+                 "\tSNR: '%.1lf dB'\n",
+                 plmn,
+                 tac,
+                 nr5g_cell_information_global_cell_id,
+                 nr5g_cell_information_physical_cell_id,
+                 (0.1) * ((gdouble)nr5g_cell_information_rsrq),
+                 (0.1) * ((gdouble)nr5g_cell_information_rsrp),
+                 (0.1) * ((gdouble)nr5g_cell_information_snr));
+    }
+
     qmi_message_nas_get_cell_location_info_output_unref (output);
     operation_shutdown (TRUE);
 }
@@ -3230,14 +3800,14 @@ get_operator_name_ready (QmiClientNas *client,
         &spn_display_condition,
         &spn,
         NULL)) {
-        gchar *dc_string = qmi_nas_network_name_display_condition_build_string_from_mask (spn_display_condition);
+        g_autofree gchar *dc_string = NULL;
 
+        dc_string = qmi_nas_network_name_display_condition_build_string_from_mask (spn_display_condition);
         g_print ("Service Provider Name\n");
         g_print ("\tDisplay Condition: '%s'\n"
                  "\tName             : '%s'\n",
-                 dc_string,
+                 VALIDATE_MASK_NONE (dc_string),
                  spn);
-        g_free (dc_string);
     }
 
     if (qmi_message_nas_get_operator_name_output_get_operator_string_name (
@@ -3322,6 +3892,126 @@ get_operator_name_ready (QmiClientNas *client,
 }
 
 #endif /* HAVE_QMI_MESSAGE_NAS_GET_OPERATOR_NAME */
+
+#if defined HAVE_QMI_MESSAGE_NAS_GET_PLMN_NAME
+
+static QmiMessageNasGetPlmnNameInput *
+set_plmn_name_input_plmn_create (const gchar *str)
+{
+    g_autoptr(GError) error = NULL;
+    g_autoptr(QmiMessageNasGetPlmnNameInput) input = NULL;
+    guint16 mcc = 0;
+    guint16 mnc = 0;
+
+    if (!qmicli_read_parse_3gpp_mcc_mnc (str, &mcc, &mnc, NULL)) {
+        g_printerr ("error: invalid net selection MCC/MNC: '%s'\n", str);
+        return NULL;
+    }
+
+    input = qmi_message_nas_get_plmn_name_input_new ();
+    if (!qmi_message_nas_get_plmn_name_input_set_plmn (
+            input,
+            mcc,
+            mnc,
+            &error)) {
+        g_printerr ("error: couldn't set MCC/MNC: '%s'\n",
+                    error->message);
+        g_clear_pointer(&input, qmi_message_nas_get_plmn_name_input_unref);
+    }
+
+    return input;
+}
+
+static void
+get_plmn_name_ready (QmiClientNas *client,
+                     GAsyncResult *res)
+{
+    g_autoptr(QmiMessageNasGetPlmnNameOutput) output = NULL;
+    g_autoptr(GError) error = NULL;
+    GArray *array;
+    QmiNasNetworkDescriptionEncoding plmn_name_service_provider_name_encoding;
+    GArray *plmn_name_service_provider_name;
+    QmiNasNetworkDescriptionEncoding plmn_name_short_name_encoding;
+    QmiNasPlmnNameCountryInitials plmn_name_short_name_country_initials;
+    QmiNasPlmnNameSpareBits plmn_name_short_name_spare_bits;
+    GArray *plmn_name_short_name;
+    QmiNasNetworkDescriptionEncoding plmn_name_long_name_encoding;
+    QmiNasPlmnNameCountryInitials plmn_name_long_name_country_initials;
+    QmiNasPlmnNameSpareBits plmn_name_long_name_spare_bits;
+    GArray *plmn_name_long_name;
+
+    output = qmi_client_nas_get_plmn_name_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_nas_get_plmn_name_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't get operator name data: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("[%s] Successfully got plmn name data\n",
+             qmi_device_get_path_display (ctx->device));
+
+    if (qmi_message_nas_get_plmn_name_output_get_3gpp_eons_plmn_name (
+        output,
+        &plmn_name_service_provider_name_encoding,
+        &plmn_name_service_provider_name,
+        &plmn_name_short_name_encoding,
+        &plmn_name_short_name_country_initials,
+        &plmn_name_short_name_spare_bits,
+        &plmn_name_short_name,
+        &plmn_name_long_name_encoding,
+        &plmn_name_long_name_country_initials,
+        &plmn_name_long_name_spare_bits,
+        &plmn_name_long_name,
+        NULL)) {
+            g_autofree gchar *long_name = NULL;
+            g_autofree gchar *short_name = NULL;
+            g_autofree gchar *service_name = NULL;
+            long_name = qmi_nas_read_string_from_network_description_encoded_array (plmn_name_long_name_encoding, plmn_name_long_name);
+            short_name = qmi_nas_read_string_from_network_description_encoded_array (plmn_name_short_name_encoding, plmn_name_short_name);
+            service_name = qmi_nas_read_string_from_network_description_encoded_array (plmn_name_service_provider_name_encoding, plmn_name_service_provider_name);
+            g_print ("3GPP EONS PLMN Name:\n"
+                 "\tLong Name:  '%s'\n"
+                 "\tShort Name: '%s'\n"
+                 "\tService Name: '%s'\n"
+                 "\tCountry:    '%s'\n",
+                 long_name ?: "",
+                 short_name ?: "",
+                 service_name ?: "",
+                 qmi_nas_plmn_name_country_initials_get_string (plmn_name_short_name_country_initials));
+    }
+
+    if (qmi_message_nas_get_plmn_name_output_get_plmn_name_with_language_id (output, &array, NULL)) {
+        guint i;
+
+        g_print ("3GPP EONS PLMN Name with Language ID:\n");
+        for (i = 0; i < array->len; i++) {
+            QmiMessageNasGetPlmnNameOutputPlmnNameWithLanguageIdElement *element;
+            g_autofree gchar *long_name;
+            g_autofree gchar *short_name;
+
+            element = &g_array_index (array, QmiMessageNasGetPlmnNameOutputPlmnNameWithLanguageIdElement, i);
+            long_name = qmi_nas_read_string_from_plmn_encoded_array (QMI_NAS_PLMN_ENCODING_SCHEME_UCS2LE, element->long_name);
+            short_name = qmi_nas_read_string_from_plmn_encoded_array (QMI_NAS_PLMN_ENCODING_SCHEME_UCS2LE, element->short_name);
+            g_print ("\t%d: '%s'%s%s%s\t\tCountry: '%s'\n",
+                     i,
+                     long_name ?: "",
+                     short_name ? " ('" : "",
+                     short_name ?: "",
+                     short_name ? "')" : "",
+                     qmi_nas_plmn_language_id_get_string (element->language_id));
+        }
+    }
+
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_NAS_GET_PLMN_NAME */
 
 #if defined HAVE_QMI_MESSAGE_NAS_GET_LTE_CPHY_CA_INFO
 
@@ -3500,7 +4190,7 @@ get_rf_band_info_ready (QmiClientNas *client,
     if (qmi_message_nas_get_rf_band_information_output_get_extended_list (
         output,
         &extended_band_array,
-        &error)) {
+        NULL)) {
         g_print ("Band Information (Extended):\n");
         for (i = 0; extended_band_array && i < extended_band_array->len; i++) {
             QmiMessageNasGetRfBandInformationOutputExtendedListElement *info;
@@ -3518,7 +4208,7 @@ get_rf_band_info_ready (QmiClientNas *client,
     if (qmi_message_nas_get_rf_band_information_output_get_bandwidth_list (
         output,
         &bandwidth_array,
-        &error)) {
+        NULL)) {
         g_print ("Bandwidth:\n");
         for (i = 0; bandwidth_array && i < bandwidth_array->len; i++) {
             QmiMessageNasGetRfBandInformationOutputBandwidthListElement *info;
@@ -3535,6 +4225,43 @@ get_rf_band_info_ready (QmiClientNas *client,
 }
 
 #endif /* HAVE_QMI_MESSAGE_NAS_GET_RF_BAND_INFORMATION */
+
+#if defined HAVE_QMI_MESSAGE_NAS_GET_DRX
+
+static void
+get_drx_ready (QmiClientNas *client,
+               GAsyncResult *res)
+{
+    g_autoptr(QmiMessageNasGetDrxOutput) output = NULL;
+    g_autoptr(GError)                    error = NULL;
+    QmiNasDrx                            drx = QMI_NAS_DRX_UNKNOWN;
+
+    output = qmi_client_nas_get_drx_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_nas_get_drx_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't get DRX: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_nas_get_drx_output_get_info (output, &drx, NULL)) {
+        g_printerr ("error: DRX info not provided\n");
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("[%s] Successfully got DRX: %s\n",
+             qmi_device_get_path_display (ctx->device),
+             qmi_nas_drx_get_string (drx));
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_NAS_GET_DRX */
 
 #if defined HAVE_QMI_MESSAGE_NAS_GET_SUPPORTED_MESSAGES
 
@@ -3587,7 +4314,7 @@ swi_get_status_ready (QmiClientNas *client,
     QmiMessageNasSwiGetStatusOutput *output;
     GError *error = NULL;
 
-    guint8 temperature;
+    gint8 temperature;
     QmiNasSwiModemMode modem_mode;
     QmiNasSwiSystemMode system_mode;
     QmiNasSwiImsRegState ims_reg_state;
@@ -3620,7 +4347,7 @@ swi_get_status_ready (QmiClientNas *client,
     g_print ("[%s] Successfully got status:\n",
              qmi_device_get_path_display (ctx->device));
 
-    if (qmi_message_nas_swi_get_status_output_get_common_info (
+    if (qmi_message_nas_swi_get_status_output_get_common_info_v2 (
             output,
             &temperature,
             &modem_mode,
@@ -3629,7 +4356,7 @@ swi_get_status_ready (QmiClientNas *client,
             &ps_state,
             NULL)) {
         g_print ("Common Info:\n"
-                "\tTemperature: '%u'\n"
+                "\tTemperature: '%d'\n"
                 "\tModem mode: '%s'\n"
                 "\tSystem mode: '%s'\n"
                 "\tIMS registration state: '%s'\n"
@@ -3794,6 +4521,41 @@ qmicli_nas_run (QmiDevice *device,
     }
 #endif
 
+#if defined HAVE_QMI_MESSAGE_NAS_GET_PREFERRED_NETWORKS
+    if (get_preferred_networks_flag) {
+        g_debug ("Asynchronously getting preferred networks...");
+        qmi_client_nas_get_preferred_networks (ctx->client,
+                                               NULL,
+                                               10,
+                                               ctx->cancellable,
+                                               (GAsyncReadyCallback)get_preferred_networks_ready,
+                                               NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_NAS_SET_PREFERRED_NETWORKS
+    if (set_preferred_networks_str) {
+        QmiMessageNasSetPreferredNetworksInput *input;
+        g_debug ("Asynchronously setting preferred networks...");
+
+        input = set_preferred_networks_input_create (set_preferred_networks_str);
+        if (!input) {
+            operation_shutdown (FALSE);
+            return;
+        }
+
+        qmi_client_nas_set_preferred_networks (ctx->client,
+                                               input,
+                                               10,
+                                               ctx->cancellable,
+                                               (GAsyncReadyCallback)set_preferred_networks_ready,
+                                               NULL);
+        qmi_message_nas_set_preferred_networks_input_ref (input);
+        return;
+    }
+#endif
+
 #if defined HAVE_QMI_MESSAGE_NAS_GET_SERVING_SYSTEM
     if (get_serving_system_flag) {
         g_debug ("Asynchronously getting serving system...");
@@ -3920,6 +4682,23 @@ qmicli_nas_run (QmiDevice *device,
     }
 #endif
 
+#if defined HAVE_QMI_MESSAGE_NAS_GET_PLMN_NAME
+    if (get_plmn_name_str) {
+
+        g_autoptr(QmiMessageNasGetPlmnNameInput) input = NULL;
+        input = set_plmn_name_input_plmn_create(get_plmn_name_str);
+
+        g_debug ("Asynchronously getting plmn name data...");
+        qmi_client_nas_get_plmn_name (ctx->client,
+                                          input,
+                                          10,
+                                          ctx->cancellable,
+                                          (GAsyncReadyCallback)get_plmn_name_ready,
+                                          NULL);
+        return;
+    }
+#endif
+
 #if defined HAVE_QMI_MESSAGE_NAS_GET_LTE_CPHY_CA_INFO
     if (get_lte_cphy_ca_info_flag) {
         g_debug ("Asynchronously getting carrier aggregation info ...");
@@ -3942,6 +4721,19 @@ qmicli_nas_run (QmiDevice *device,
                                                 ctx->cancellable,
                                                 (GAsyncReadyCallback)get_rf_band_info_ready,
                                                 NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_NAS_GET_DRX
+    if (get_drx_flag) {
+        g_debug ("Asynchronously getting DRX ...");
+        qmi_client_nas_get_drx (ctx->client,
+                                NULL,
+                                10,
+                                ctx->cancellable,
+                                (GAsyncReadyCallback)get_drx_ready,
+                                NULL);
         return;
     }
 #endif

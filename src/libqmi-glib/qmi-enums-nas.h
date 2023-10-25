@@ -19,6 +19,7 @@
  *
  * Copyright (C) 2012 Google Inc.
  * Copyright (C) 2012-2017 Aleksander Morgado <aleksander@aleksander.es>
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc.
  */
 
 #ifndef _LIBQMI_GLIB_QMI_ENUMS_NAS_H_
@@ -30,6 +31,8 @@
 
 /**
  * SECTION: qmi-enums-nas
+ * @title: NAS enumerations and flags
+ * @short_description: Enumerations and flags in the NAS service.
  *
  * This section defines enumerations and flags used in the NAS service
  * interface.
@@ -165,6 +168,53 @@ typedef enum { /*< since=1.0 >*/
  * @QMI_NAS_ACTIVE_BAND_TDSCDMA_D: TD-SCDMA Band D.
  * @QMI_NAS_ACTIVE_BAND_TDSCDMA_E: TD-SCDMA Band E.
  * @QMI_NAS_ACTIVE_BAND_TDSCDMA_F: TD-SCDMA Band F.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_1: NR5G Band 1. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_2: NR5G Band 2. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_3: NR5G Band 3. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_5: NR5G Band 5. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_7: NR5G Band 7. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_8: NR5G Band 8. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_12: NR5G Band 12. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_13: NR5G Band 13. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_14: NR5G Band 14. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_18: NR5G Band 18. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_20: NR5G Band 20. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_25: NR5G Band 25. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_26: NR5G Band 26. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_28: NR5G Band 28. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_29: NR5G Band 29. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_30: NR5G Band 30. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_34: NR5G Band 34. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_38: NR5G Band 38. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_39: NR5G Band 39. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_40: NR5G Band 40. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_41: NR5G Band 41. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_48: NR5G Band 48. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_50: NR5G Band 50. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_51: NR5G Band 51. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_53: NR5G Band 53. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_65: NR5G Band 65. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_66: NR5G Band 66. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_70: NR5G Band 70. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_71: NR5G Band 71. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_74: NR5G Band 74. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_75: NR5G Band 75. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_76: NR5G Band 76. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_77: NR5G Band 77. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_78: NR5G Band 78. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_79: NR5G Band 79. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_80: NR5G Band 80. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_81: NR5G Band 81. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_82: NR5G Band 82. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_83: NR5G Band 83. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_84: NR5G Band 84. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_85: NR5G Band 85. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_86: NR5G Band 86. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_257: NR5G Band 257. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_258: NR5G Band 258. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_259: NR5G Band 259. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_260: NR5G Band 260. Since 1.32.
+ * @QMI_NAS_ACTIVE_BAND_NR5G_261: NR5G Band 261. Since 1.32.
  *
  * Band classes.
  *
@@ -265,7 +315,54 @@ typedef enum { /*< since=1.0 >*/
     QMI_NAS_ACTIVE_BAND_TDSCDMA_C = 202,
     QMI_NAS_ACTIVE_BAND_TDSCDMA_D = 203,
     QMI_NAS_ACTIVE_BAND_TDSCDMA_E = 204,
-    QMI_NAS_ACTIVE_BAND_TDSCDMA_F = 205
+    QMI_NAS_ACTIVE_BAND_TDSCDMA_F = 205,
+    QMI_NAS_ACTIVE_BAND_NR5G_1 = 250,
+    QMI_NAS_ACTIVE_BAND_NR5G_2 = 251,
+    QMI_NAS_ACTIVE_BAND_NR5G_3 = 252,
+    QMI_NAS_ACTIVE_BAND_NR5G_5 = 253,
+    QMI_NAS_ACTIVE_BAND_NR5G_7 = 254,
+    QMI_NAS_ACTIVE_BAND_NR5G_8 = 255,
+    QMI_NAS_ACTIVE_BAND_NR5G_20 = 256,
+    QMI_NAS_ACTIVE_BAND_NR5G_28 = 257,
+    QMI_NAS_ACTIVE_BAND_NR5G_38 = 258,
+    QMI_NAS_ACTIVE_BAND_NR5G_41 = 259,
+    QMI_NAS_ACTIVE_BAND_NR5G_50 = 260,
+    QMI_NAS_ACTIVE_BAND_NR5G_51 = 261,
+    QMI_NAS_ACTIVE_BAND_NR5G_66 = 262,
+    QMI_NAS_ACTIVE_BAND_NR5G_70 = 263,
+    QMI_NAS_ACTIVE_BAND_NR5G_71 = 264,
+    QMI_NAS_ACTIVE_BAND_NR5G_74 = 265,
+    QMI_NAS_ACTIVE_BAND_NR5G_75 = 266,
+    QMI_NAS_ACTIVE_BAND_NR5G_76 = 267,
+    QMI_NAS_ACTIVE_BAND_NR5G_77 = 268,
+    QMI_NAS_ACTIVE_BAND_NR5G_78 = 269,
+    QMI_NAS_ACTIVE_BAND_NR5G_79 = 270,
+    QMI_NAS_ACTIVE_BAND_NR5G_80 = 271,
+    QMI_NAS_ACTIVE_BAND_NR5G_81 = 272,
+    QMI_NAS_ACTIVE_BAND_NR5G_82 = 273,
+    QMI_NAS_ACTIVE_BAND_NR5G_83 = 274,
+    QMI_NAS_ACTIVE_BAND_NR5G_84 = 275,
+    QMI_NAS_ACTIVE_BAND_NR5G_85 = 276,
+    QMI_NAS_ACTIVE_BAND_NR5G_257 = 277,
+    QMI_NAS_ACTIVE_BAND_NR5G_258 = 278,
+    QMI_NAS_ACTIVE_BAND_NR5G_259 = 279,
+    QMI_NAS_ACTIVE_BAND_NR5G_260 = 280,
+    QMI_NAS_ACTIVE_BAND_NR5G_261 = 281,
+    QMI_NAS_ACTIVE_BAND_NR5G_12 = 282,
+    QMI_NAS_ACTIVE_BAND_NR5G_25 = 283,
+    QMI_NAS_ACTIVE_BAND_NR5G_34 = 284,
+    QMI_NAS_ACTIVE_BAND_NR5G_39 = 285,
+    QMI_NAS_ACTIVE_BAND_NR5G_40 = 286,
+    QMI_NAS_ACTIVE_BAND_NR5G_65 = 287,
+    QMI_NAS_ACTIVE_BAND_NR5G_86 = 288,
+    QMI_NAS_ACTIVE_BAND_NR5G_48 = 289,
+    QMI_NAS_ACTIVE_BAND_NR5G_14 = 290,
+    QMI_NAS_ACTIVE_BAND_NR5G_13 = 291,
+    QMI_NAS_ACTIVE_BAND_NR5G_18 = 292,
+    QMI_NAS_ACTIVE_BAND_NR5G_26 = 293,
+    QMI_NAS_ACTIVE_BAND_NR5G_30 = 294,
+    QMI_NAS_ACTIVE_BAND_NR5G_29 = 295,
+    QMI_NAS_ACTIVE_BAND_NR5G_53 = 296
 } QmiNasActiveBand;
 
 /**
@@ -660,6 +757,34 @@ typedef enum { /*< since=1.0 >*/
  */
 gchar *qmi_nas_read_string_from_network_description_encoded_array (QmiNasNetworkDescriptionEncoding  encoding,
                                                                    const GArray                     *array);
+
+/*****************************************************************************/
+/* Helper enums for the 'QMI NAS Get Preferred Networks' request/response */
+
+/**
+ * QmiNasPlmnAccessTechnologyIdentifier:
+ * @QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_UNSPECIFIED: Unspecified.
+ * @QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_GSM_COMPACT: GSM Compact.
+ * @QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_GSM: GSM.
+ * @QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_NGRAN: NG-RAN.
+ * @QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_EUTRAN: E-UTRAN.
+ * @QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_UTRAN: UTRAN.
+ * @QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_ALL: All technologies.
+ *
+ * Preferred networks access technology identifier as specified in
+ * ETSI TS 131 102, chapter 4.2.5.
+ *
+ * Since: 1.30
+ */
+typedef enum { /*< since=1.30 >*/
+    QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_UNSPECIFIED = 0x0000,
+    QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_GSM_COMPACT = 1 << 6,
+    QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_GSM         = 1 << 7,
+    QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_NGRAN       = 1 << 11,
+    QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_EUTRAN      = 1 << 14,
+    QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_UTRAN       = 1 << 15,
+    QMI_NAS_PLMN_ACCESS_TECHNOLOGY_IDENTIFIER_ALL         = 0xFFFF
+} QmiNasPlmnAccessTechnologyIdentifier;
 
 /*****************************************************************************/
 /* Helper enums for the 'QMI NAS Get Technology Preference' request/response */
@@ -1330,6 +1455,8 @@ typedef enum { /*< since=1.24 >*/
  * @QMI_NAS_SWI_MODEM_MODE_RESETTING_MODEM: Resetting modem
  * @QMI_NAS_SWI_MODEM_MODE_UNKNOWN: Unknown
  *
+ * Modem mode (Sierra Wireless specific).
+ *
  * Since: 1.24
  */
 typedef enum { /*< since=1.24 >*/
@@ -1361,6 +1488,8 @@ typedef enum { /*< since=1.24 >*/
  * @QMI_NAS_SWI_SYSTEM_MODE_LTE: LTE
  * @QMI_NAS_SWI_SYSTEM_MODE_UNKNOWN: Unknown
  *
+ * System mode (Sierra Wireless specific).
+ *
  * Since: 1.24
  */
 typedef enum { /*< since=1.24 >*/
@@ -1385,6 +1514,8 @@ typedef enum { /*< since=1.24 >*/
  * @QMI_NAS_SWI_IMS_REG_FULL_SRV: Full service
  * @QMI_NAS_SWI_IMS_REG__UNKNOWN: Unknown
  *
+ * IMS registration state. (Sierra Wireless specific).
+ *
  * Since: 1.24
  */
 typedef enum { /*< since=1.24 >*/
@@ -1401,6 +1532,8 @@ typedef enum { /*< since=1.24 >*/
  * @QMI_NAS_SWI_PS_STATE_ATTACHED: Attached
  * @QMI_NAS_SWI_PS_STATE_DETACHED: Detached
  * @QMI_NAS_SWI_PS_STATE_UNKNOWN: Unknown
+ *
+ * PS registration state. (Sierra Wireless specific).
  *
  * Since: 1.24
  */
@@ -1420,6 +1553,8 @@ typedef enum { /*< since=1.24 >*/
  * @QMI_NAS_SWI_EMM_STATE_DEREG_INITIATED: Deregistration initiated
  * @QMI_NAS_SWI_EMM_STATE_INVALID: Invalid
  * @QMI_NAS_SWI_EMM_STATE_UNKNOWN: Unknown
+ *
+ * EMM registration state. (Sierra Wireless specific).
  *
  * Since: 1.24
  */
@@ -1442,6 +1577,8 @@ typedef enum { /*< since=1.24 >*/
  * @QMI_NAS_SWI_EMM_CONN_STATE_RRC_RELEASING: RRC releasing
  * @QMI_NAS_SWI_EMM_CONN_STATE_UNKNOWN: Unknown
  *
+ * EMM connection state state. (Sierra Wireless specific).
+ *
  * Since: 1.24
  */
 typedef enum { /*< since=1.24 >*/
@@ -1451,5 +1588,208 @@ typedef enum { /*< since=1.24 >*/
     QMI_NAS_SWI_EMM_CONN_STATE_RRC_RELEASING   = 0x03,
     QMI_NAS_SWI_EMM_CONN_STATE_UNKNOWN         = 0xff
 } QmiNasSwiEmmConnectionState;
+
+/**
+ * QmiNasDrx:
+ * @QMI_NAS_DRX_UNKNOWN: Unknown or not specified.
+ * @QMI_NAS_DRX_CN6_T32: CN=6, T=32.
+ * @QMI_NAS_DRX_CN7_T64: CN=7, T=64.
+ * @QMI_NAS_DRX_CN8_T128: CN=8, T=128.
+ * @QMI_NAS_DRX_CN9_T256: CN=9, T=256.
+ *
+ * DRX setting of the device.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    QMI_NAS_DRX_UNKNOWN  = 0x00,
+    QMI_NAS_DRX_CN6_T32  = 0x06,
+    QMI_NAS_DRX_CN7_T64  = 0x07,
+    QMI_NAS_DRX_CN8_T128 = 0x08,
+    QMI_NAS_DRX_CN9_T256 = 0x09,
+} QmiNasDrx;
+
+/**
+ * QmiNasBoolean:
+ * @QMI_NAS_BOOLEAN_FALSE: Status FALSE.
+ * @QMI_NAS_BOOLEAN_TRUE: Status TRUE.
+ * @QMI_NAS_BOOLEAN_UNKNOWN: Status Unknown.
+ *
+ * Boolean flag with validity info.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    QMI_NAS_BOOLEAN_FALSE    = 0x00,
+    QMI_NAS_BOOLEAN_TRUE     = 0x01,
+    QMI_NAS_BOOLEAN_UNKNOWN  = 0x02
+} QmiNasBoolean;
+
+/**
+ * QmiNasPlmnLanguageId:
+ * @QMI_NAS_PLMN_LANGUAGE_ID_UNKNOWN: Language Unknown.
+ * @QMI_NAS_PLMN_LANGUAGE_ID_ZH_TRAD: Traditional Chinese.
+ * @QMI_NAS_PLMN_LANGUAGE_ID_ZH_SIMP: Simplified Chinese.
+ *
+ * Language ID used when encoding the PLMN.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    QMI_NAS_PLMN_LANGUAGE_ID_UNKNOWN = 0x00,
+    QMI_NAS_PLMN_LANGUAGE_ID_ZH_TRAD = 0x01,
+    QMI_NAS_PLMN_LANGUAGE_ID_ZH_SIMP = 0x02
+} QmiNasPlmnLanguageId;
+
+/**
+ * QmiNasLteVoiceDomain:
+ * @QMI_NAS_LTE_VOICE_DOMAIN_NONE: No voice.
+ * @QMI_NAS_LTE_VOICE_DOMAIN_IMS: Voice is supported over IMS network.
+ * @QMI_NAS_LTE_VOICE_DOMAIN_1X: Voice is supported over the 1X network.
+ * @QMI_NAS_LTE_VOICE_DOMAIN_3GPP: Voice is supported over the 3GPP network.
+ *
+ * LTE voice domain.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    QMI_NAS_LTE_VOICE_DOMAIN_NONE = 0x00,
+    QMI_NAS_LTE_VOICE_DOMAIN_IMS  = 0x01,
+    QMI_NAS_LTE_VOICE_DOMAIN_1X   = 0x02,
+    QMI_NAS_LTE_VOICE_DOMAIN_3GPP = 0x03
+} QmiNasLteVoiceDomain;
+
+/**
+ * QmiNasRejectCause:
+ * @QMI_NAS_REJECT_CAUSE_NONE: None.
+ * @QMI_NAS_REJECT_CAUSE_IMSI_UNKNOWN_IN_HLR: IMSI unknown in HLR/HSS.
+ * @QMI_NAS_REJECT_CAUSE_ILLEGAL_UE: Illegal MS/UE.
+ * @QMI_NAS_REJECT_CAUSE_IMSI_UNKNOWN_IN_VLR: IMSI unknown in VLR.
+ * @QMI_NAS_REJECT_CAUSE_IMEI_NOT_ACCEPTED: IMEI not accepted.
+ * @QMI_NAS_REJECT_CAUSE_ILLEGAL_ME: Illegal ME.
+ * @QMI_NAS_REJECT_CAUSE_PS_SERVICES_NOT_ALLOWED: GPRS/EPS services not allowed.
+ * @QMI_NAS_REJECT_CAUSE_PS_AND_NON_PS_SERVICES_NOT_ALLOWED: GPRS/EPS and non-GPRS/EPS services not allowed.
+ * @QMI_NAS_REJECT_CAUSE_UE_IDENTITY_NOT_DERIVED_BY_NETWORK: MS/UE identity not derived by network.
+ * @QMI_NAS_REJECT_CAUSE_IMPLICITLY_DETACHED: Implicitly detached.
+ * @QMI_NAS_REJECT_CAUSE_PLMN_NOT_ALLOWED: PLMN not allowed.
+ * @QMI_NAS_REJECT_CAUSE_LOCATION_AREA_NOT_ALLOWED: Location/tracking area not allowed.
+ * @QMI_NAS_REJECT_CAUSE_ROAMING_IN_LOCATION_AREA_NOT_ALLOWED: Roaming in location/tracking area not allowed.
+ * @QMI_NAS_REJECT_CAUSE_PS_SERVICES_IN_LOCATION_AREA_NOT_ALLOWED: GPRS/EPS services in location/tracking area not allowed.
+ * @QMI_NAS_REJECT_CAUSE_NO_SUITABLE_CELLS_IN_LOCATION_AREA: No suitable cells in location/tracking area.
+ * @QMI_NAS_REJECT_CAUSE_MSC_TEMPORARILY_NOT_REACHABLE: MSC temporarily not reachable.
+ * @QMI_NAS_REJECT_CAUSE_NETWORK_FAILURE: Network failure.
+ * @QMI_NAS_REJECT_CAUSE_CS_DOMAIN_NOT_AVAILABLE: CS domain not available.
+ * @QMI_NAS_REJECT_CAUSE_ESM_FAILURE: ESM failure.
+ * @QMI_NAS_REJECT_CAUSE_MAC_FAILURE: MAC failure.
+ * @QMI_NAS_REJECT_CAUSE_SYNCH_FAILURE: Synch failure.
+ * @QMI_NAS_REJECT_CAUSE_CONGESTION: Congestion.
+ * @QMI_NAS_REJECT_CAUSE_UE_SECURITY_CAPABILITIES_MISMATCH: GSM authentication unacceptable, UE security capabilities mismatch.
+ * @QMI_NAS_REJECT_CAUSE_SECURITY_MODE_REJECTED_UNSPECIFIED: Security mode rejected or unspecified.
+ * @QMI_NAS_REJECT_CAUSE_CSG_NOT_AUTHORIZED: CSG not authorized.
+ * @QMI_NAS_REJECT_CAUSE_NON_EPS_AUTHENTICATION_UNACCEPTABLE: Non-EPS authentication unacceptable.
+ * @QMI_NAS_REJECT_CAUSE_SMS_PROVIDED_BY_GPRS_IN_ROUTING_AREA: SMS provided by GPRS in routing area.
+ * @QMI_NAS_REJECT_CAUSE_REDIRECTION_TO_5GCN_REQUIRED: Redirection to 5GCN required.
+ * @QMI_NAS_REJECT_CAUSE_SERVICE_OPTION_NOT_SUPPORTED: Service option not supported.
+ * @QMI_NAS_REJECT_CAUSE_REQUESTED_SERVICE_OPTION_NOT_SUBSCRIBED: Requested service option not subscribed.
+ * @QMI_NAS_REJECT_CAUSE_SERVICE_OPTION_TEMPORARILY_OUT_OF_ORDER: Service option temporarily out of order.
+ * @QMI_NAS_REJECT_CAUSE_REQUESTED_SERVICE_OPTION_NOT_AUTHORIZED: Requested service option not authorized.
+ * @QMI_NAS_REJECT_CAUSE_CALL_CANNOT_BE_IDENTIFIED: Call cannot be identified.
+ * @QMI_NAS_REJECT_CAUSE_CS_SERVICE_TEMPORARILY_NOT_AVAILABLE: CS service temporarily not available.
+ * @QMI_NAS_REJECT_CAUSE_NO_EPS_BEARER_CONTEXT_ACTIVATED: No EPS bearer context activated.
+ * @QMI_NAS_REJECT_CAUSE_SEVERE_NETWORK_FAILURE: Severe network failure.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_0: Retry upon entry 0.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_1: Retry upon entry 1.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_2: Retry upon entry 2.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_3: Retry upon entry 3.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_4: Retry upon entry 4.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_5: Retry upon entry 5.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_6: Retry upon entry 6.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_7: Retry upon entry 7.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_8: Retry upon entry 8.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_9: Retry upon entry 9.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_10: Retry upon entry 10.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_11: Retry upon entry 11.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_12: Retry upon entry 12.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_13: Retry upon entry 13.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_14: Retry upon entry 14.
+ * @QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_15: Retry upon entry 15.
+ * @QMI_NAS_REJECT_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE: Semantically incorrect message.
+ * @QMI_NAS_REJECT_CAUSE_INVALID_MANDATORY_INFORMATION: Invalid mandatory information.
+ * @QMI_NAS_REJECT_CAUSE_MESSAGE_TYPE_NON_EXISTENT: Message type non existent.
+ * @QMI_NAS_REJECT_CAUSE_MESSAGE_TYPE_NOT_COMPATIBLE: Message type not compatible.
+ * @QMI_NAS_REJECT_CAUSE_INFORMATION_ELEMENT_NON_EXISTENT: Information element non existent.
+ * @QMI_NAS_REJECT_CAUSE_CONDITIONAL_INFORMATION_ELEMENT_ERROR: Conditional information element error.
+ * @QMI_NAS_REJECT_CAUSE_MESSAGE_NOT_COMPATIBLE: Message not compatible.
+ * @QMI_NAS_REJECT_CAUSE_UNSPECIFIED_PROTOCOL_ERROR: Unspecified protocol error.
+ *
+ * Reason why a request from the mobile station is rejected by the network.
+ *
+ * Defined in 3GPP TS 24.008 in sections 10.5.3.6 and 10.5.5.14 (detailed in
+ * annex G) and in 3GPP TS 24.301 in section 9.9.3.9.
+ *
+ * Since: 1.30
+ */
+typedef enum { /*< since=1.30 >*/
+    QMI_NAS_REJECT_CAUSE_NONE                                       = 0x00,
+    QMI_NAS_REJECT_CAUSE_IMSI_UNKNOWN_IN_HLR                        = 0x02,
+    QMI_NAS_REJECT_CAUSE_ILLEGAL_UE                                 = 0x03,
+    QMI_NAS_REJECT_CAUSE_IMSI_UNKNOWN_IN_VLR                        = 0x04,
+    QMI_NAS_REJECT_CAUSE_IMEI_NOT_ACCEPTED                          = 0x05,
+    QMI_NAS_REJECT_CAUSE_ILLEGAL_ME                                 = 0x06,
+    QMI_NAS_REJECT_CAUSE_PS_SERVICES_NOT_ALLOWED                    = 0x07,
+    QMI_NAS_REJECT_CAUSE_PS_AND_NON_PS_SERVICES_NOT_ALLOWED         = 0x08,
+    QMI_NAS_REJECT_CAUSE_UE_IDENTITY_NOT_DERIVED_BY_NETWORK         = 0x09,
+    QMI_NAS_REJECT_CAUSE_IMPLICITLY_DETACHED                        = 0x0A,
+    QMI_NAS_REJECT_CAUSE_PLMN_NOT_ALLOWED                           = 0x0B,
+    QMI_NAS_REJECT_CAUSE_LOCATION_AREA_NOT_ALLOWED                  = 0x0C,
+    QMI_NAS_REJECT_CAUSE_ROAMING_IN_LOCATION_AREA_NOT_ALLOWED       = 0x0D,
+    QMI_NAS_REJECT_CAUSE_PS_SERVICES_IN_LOCATION_AREA_NOT_ALLOWED   = 0x0E,
+    QMI_NAS_REJECT_CAUSE_NO_SUITABLE_CELLS_IN_LOCATION_AREA         = 0x0F,
+    QMI_NAS_REJECT_CAUSE_MSC_TEMPORARILY_NOT_REACHABLE              = 0x10,
+    QMI_NAS_REJECT_CAUSE_NETWORK_FAILURE                            = 0x11,
+    QMI_NAS_REJECT_CAUSE_CS_DOMAIN_NOT_AVAILABLE                    = 0x12,
+    QMI_NAS_REJECT_CAUSE_ESM_FAILURE                                = 0x13,
+    QMI_NAS_REJECT_CAUSE_MAC_FAILURE                                = 0x14,
+    QMI_NAS_REJECT_CAUSE_SYNCH_FAILURE                              = 0x15,
+    QMI_NAS_REJECT_CAUSE_CONGESTION                                 = 0x16,
+    QMI_NAS_REJECT_CAUSE_UE_SECURITY_CAPABILITIES_MISMATCH          = 0x17,
+    QMI_NAS_REJECT_CAUSE_SECURITY_MODE_REJECTED_UNSPECIFIED         = 0x18,
+    QMI_NAS_REJECT_CAUSE_CSG_NOT_AUTHORIZED                         = 0x19,
+    QMI_NAS_REJECT_CAUSE_NON_EPS_AUTHENTICATION_UNACCEPTABLE        = 0x1A,
+    QMI_NAS_REJECT_CAUSE_SMS_PROVIDED_BY_GPRS_IN_ROUTING_AREA       = 0x1C,
+    QMI_NAS_REJECT_CAUSE_REDIRECTION_TO_5GCN_REQUIRED               = 0x1F,
+    QMI_NAS_REJECT_CAUSE_SERVICE_OPTION_NOT_SUPPORTED               = 0x20,
+    QMI_NAS_REJECT_CAUSE_REQUESTED_SERVICE_OPTION_NOT_SUBSCRIBED    = 0x21,
+    QMI_NAS_REJECT_CAUSE_SERVICE_OPTION_TEMPORARILY_OUT_OF_ORDER    = 0x22,
+    QMI_NAS_REJECT_CAUSE_REQUESTED_SERVICE_OPTION_NOT_AUTHORIZED    = 0x23,
+    QMI_NAS_REJECT_CAUSE_CALL_CANNOT_BE_IDENTIFIED                  = 0x26,
+    QMI_NAS_REJECT_CAUSE_CS_SERVICE_TEMPORARILY_NOT_AVAILABLE       = 0x27,
+    QMI_NAS_REJECT_CAUSE_NO_EPS_BEARER_CONTEXT_ACTIVATED            = 0x28,
+    QMI_NAS_REJECT_CAUSE_SEVERE_NETWORK_FAILURE                     = 0x2A,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_0           = 0x30,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_1           = 0x31,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_2           = 0x32,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_3           = 0x33,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_4           = 0x34,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_5           = 0x35,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_6           = 0x36,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_7           = 0x37,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_8           = 0x38,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_9           = 0x39,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_10          = 0x3A,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_11          = 0x3B,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_12          = 0x3C,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_13          = 0x3D,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_14          = 0x3E,
+    QMI_NAS_REJECT_CAUSE_RETRY_UPON_ENTRY_INTO_NEW_CELL_15          = 0x3F,
+    QMI_NAS_REJECT_CAUSE_SEMANTICALLY_INCORRECT_MESSAGE             = 0x5F,
+    QMI_NAS_REJECT_CAUSE_INVALID_MANDATORY_INFORMATION              = 0x60,
+    QMI_NAS_REJECT_CAUSE_MESSAGE_TYPE_NON_EXISTENT                  = 0x61,
+    QMI_NAS_REJECT_CAUSE_MESSAGE_TYPE_NOT_COMPATIBLE                = 0x62,
+    QMI_NAS_REJECT_CAUSE_INFORMATION_ELEMENT_NON_EXISTENT           = 0x63,
+    QMI_NAS_REJECT_CAUSE_CONDITIONAL_INFORMATION_ELEMENT_ERROR      = 0x64,
+    QMI_NAS_REJECT_CAUSE_MESSAGE_NOT_COMPATIBLE                     = 0x65,
+    QMI_NAS_REJECT_CAUSE_UNSPECIFIED_PROTOCOL_ERROR                 = 0x6F,
+} QmiNasRejectCause;
 
 #endif /* _LIBQMI_GLIB_QMI_ENUMS_NAS_H_ */

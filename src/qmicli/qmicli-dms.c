@@ -38,6 +38,9 @@
 #undef VALIDATE_UNKNOWN
 #define VALIDATE_UNKNOWN(str) (str ? str : "unknown")
 
+#undef VALIDATE_MASK_NONE
+#define VALIDATE_MASK_NONE(str) (str ? str : "none")
+
 /* Context */
 typedef struct {
     QmiDevice *device;
@@ -102,6 +105,8 @@ static gchar *dell_change_device_mode_str; /* deprecated */
 static gchar *foxconn_change_device_mode_str;
 static gchar *dell_get_firmware_version_str; /* deprecated */
 static gchar *foxconn_get_firmware_version_str;
+static gint foxconn_set_fcc_authentication_int = -1;
+static gchar *foxconn_set_fcc_authentication_v2_str;
 static gchar *get_mac_address_str;
 static gboolean reset_flag;
 static gboolean noop_flag;
@@ -356,8 +361,8 @@ static GOptionEntry entries[] = {
 #endif
 #if defined HAVE_QMI_MESSAGE_DMS_SET_FIRMWARE_PREFERENCE
     { "dms-set-firmware-preference", 0, 0, G_OPTION_ARG_STRING, &set_firmware_preference_str,
-      "Set firmware preference",
-      "[(fwver),(config),(carrier)]"
+      "Set firmware preference (required keys: firmware-version, config-version, carrier; optional keys: modem-storage-index, override-download=yes)",
+      "[\"key=value,...\"]"
     },
 #endif
 #if defined HAVE_QMI_MESSAGE_DMS_GET_BOOT_IMAGE_DOWNLOAD_MODE
@@ -426,6 +431,18 @@ static GOptionEntry entries[] = {
       "[firmware-mcfg-apps|firmware-mcfg|apps]"
     },
 #endif
+#if defined HAVE_QMI_MESSAGE_DMS_FOXCONN_SET_FCC_AUTHENTICATION
+    { "dms-foxconn-set-fcc-authentication", 0, 0, G_OPTION_ARG_INT, &foxconn_set_fcc_authentication_int,
+      "Set FCC authentication (Foxconn specific)",
+      "[magic]"
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_DMS_FOXCONN_SET_FCC_AUTHENTICATION_V2
+    { "dms-foxconn-set-fcc-authentication-v2", 0, 0, G_OPTION_ARG_STRING, &foxconn_set_fcc_authentication_v2_str,
+      "Set FCC authentication (Foxconn specific, v2)",
+      "[magic-string,magic-number]"
+    },
+#endif
 #if defined HAVE_QMI_MESSAGE_DMS_GET_MAC_ADDRESS
     { "dms-get-mac-address", 0, 0, G_OPTION_ARG_STRING, &get_mac_address_str,
       "Get default MAC address",
@@ -455,7 +472,7 @@ static GOptionEntry entries[] = {
       "[firmware-mcfg-apps|firmware-mcfg|apps]"
     },
 #endif
-    { NULL }
+    { NULL, 0, 0, 0, NULL, NULL, NULL }
 };
 
 GOptionGroup *
@@ -537,6 +554,8 @@ qmicli_dms_options_enabled (void)
                  !!foxconn_change_device_mode_str +
                  !!dell_get_firmware_version_str +
                  !!foxconn_get_firmware_version_str +
+                 (foxconn_set_fcc_authentication_int >= 0) +
+                 !!foxconn_set_fcc_authentication_v2_str +
                  !!get_mac_address_str +
                  reset_flag +
                  noop_flag);
@@ -875,7 +894,7 @@ static void
 get_power_state_ready (QmiClientDms *client,
                        GAsyncResult *res)
 {
-    gchar *power_state_str;
+    g_autofree gchar *power_state_str = NULL;
     guint8 power_state_flags;
     guint8 battery_level;
     QmiMessageDmsGetPowerStateOutput *output;
@@ -907,10 +926,9 @@ get_power_state_ready (QmiClientDms *client,
              "\tPower state: '%s'\n"
              "\tBattery level: '%u %%'\n",
              qmi_device_get_path_display (ctx->device),
-             power_state_str,
+             VALIDATE_MASK_NONE (power_state_str),
              (guint)battery_level);
 
-    g_free (power_state_str);
     qmi_message_dms_get_power_state_output_unref (output);
     operation_shutdown (TRUE);
 }
@@ -1791,14 +1809,13 @@ get_operating_mode_ready (QmiClientDms *client,
 
     if (mode == QMI_DMS_OPERATING_MODE_OFFLINE || mode == QMI_DMS_OPERATING_MODE_LOW_POWER) {
         QmiDmsOfflineReason reason;
-        gchar *reason_str = NULL;
 
         if (qmi_message_dms_get_operating_mode_output_get_offline_reason (output, &reason, NULL)) {
-            reason_str = qmi_dms_offline_reason_build_string_from_mask (reason);
-        }
+            g_autofree gchar *reason_str = NULL;
 
-        g_print ("\tReason: '%s'\n", VALIDATE_UNKNOWN (reason_str));
-        g_free (reason_str);
+            reason_str = qmi_dms_offline_reason_build_string_from_mask (reason);
+            g_print ("\tReason: '%s'\n", VALIDATE_MASK_NONE (reason_str));
+        }
     }
 
     qmi_message_dms_get_operating_mode_output_get_hardware_restricted_mode (output, &hw_restricted, NULL);
@@ -2665,8 +2682,8 @@ get_band_capabilities_ready (QmiClientDms *client,
     QmiDmsBandCapability band_capability;
     QmiDmsLteBandCapability lte_band_capability;
     GArray *extended_lte_band_capability;
+    GArray *nr5g_band_capability;
     GError *error = NULL;
-    gchar *str;
 
     output = qmi_client_dms_get_band_capabilities_finish (client, res, &error);
     if (!output) {
@@ -2684,25 +2701,27 @@ get_band_capabilities_ready (QmiClientDms *client,
         return;
     }
 
-    qmi_message_dms_get_band_capabilities_output_get_band_capability (
-        output,
-        &band_capability,
-        NULL);
+    if (qmi_message_dms_get_band_capabilities_output_get_band_capability (
+            output,
+            &band_capability,
+            NULL)) {
+        g_autofree gchar *str = NULL;
 
-    str = qmi_dms_band_capability_build_string_from_mask (band_capability);
-    g_print ("[%s] Device band capabilities retrieved:\n"
-             "\tBands: '%s'\n",
-             qmi_device_get_path_display (ctx->device),
-             str);
-    g_free (str);
+        str = qmi_dms_band_capability_build_string_from_mask (band_capability);
+        g_print ("[%s] Device band capabilities retrieved:\n"
+                 "\tBands: '%s'\n",
+                 qmi_device_get_path_display (ctx->device),
+                 VALIDATE_MASK_NONE (str));
+    }
 
     if (qmi_message_dms_get_band_capabilities_output_get_lte_band_capability (
             output,
             &lte_band_capability,
             NULL)) {
+        g_autofree gchar *str = NULL;
+
         str = qmi_dms_lte_band_capability_build_string_from_mask (lte_band_capability);
-        g_print ("\tLTE bands: '%s'\n", str);
-        g_free (str);
+        g_print ("\tLTE bands: '%s'\n", VALIDATE_MASK_NONE (str));
     }
 
     if (qmi_message_dms_get_band_capabilities_output_get_extended_lte_band_capability (
@@ -2716,6 +2735,20 @@ get_band_capabilities_ready (QmiClientDms *client,
             g_print ("%s%" G_GUINT16_FORMAT,
                      i == 0 ? "" : ", ",
                      g_array_index (extended_lte_band_capability, guint16, i));
+        g_print ("'\n");
+    }
+
+    if (qmi_message_dms_get_band_capabilities_output_get_nr5g_band_capability (
+            output,
+            &nr5g_band_capability,
+            NULL)) {
+        guint i;
+
+        g_print ("\tNR5G bands: '");
+        for (i = 0; i < nr5g_band_capability->len; i++)
+            g_print ("%s%" G_GUINT16_FORMAT,
+                     i == 0 ? "" : ", ",
+                     g_array_index (nr5g_band_capability, guint16, i));
         g_print ("'\n");
     }
 
@@ -2894,7 +2927,6 @@ get_image_info (ListImagesContext *operation_ctx)
     GArray *array;
     QmiMessageDmsListStoredImagesOutputListImage *image;
     QmiMessageDmsListStoredImagesOutputListImageSublistSublistElement *subimage;
-    QmiMessageDmsGetStoredImageInfoInputImage image_id;
     g_autoptr(QmiMessageDmsGetStoredImageInfoInput) input = NULL;
 
     qmi_message_dms_list_stored_images_output_get_list (
@@ -2936,11 +2968,12 @@ get_image_info (ListImagesContext *operation_ctx)
                                operation_ctx->j);
 
     /* Query image info */
-    image_id.type = image->type;
-    image_id.unique_id = subimage->unique_id;
-    image_id.build_id = subimage->build_id;
     input = qmi_message_dms_get_stored_image_info_input_new ();
-    qmi_message_dms_get_stored_image_info_input_set_image (input, &image_id, NULL);
+    qmi_message_dms_get_stored_image_info_input_set_image_details (input,
+                                                                   image->type,
+                                                                   subimage->unique_id,
+                                                                   subimage->build_id,
+                                                                   NULL);
     qmi_client_dms_get_stored_image_info (ctx->client,
                                           input,
                                           10,
@@ -3381,32 +3414,39 @@ static void
 get_stored_image_delete_ready (QmiClientDms *client,
                                GAsyncResult *res)
 {
-    QmiMessageDmsDeleteStoredImageInput *input;
-    QmiMessageDmsDeleteStoredImageInputImage modem_image_id;
-    QmiMessageDmsDeleteStoredImageInputImage pri_image_id;
-
-    modem_image_id.type = QMI_DMS_FIRMWARE_IMAGE_TYPE_MODEM;
-    pri_image_id.type = QMI_DMS_FIRMWARE_IMAGE_TYPE_PRI;
+    g_autoptr(QmiMessageDmsDeleteStoredImageInput)  input = NULL;
+    g_autoptr(GArray)                               modem_unique_id = NULL;
+    g_autofree gchar                               *modem_build_id = NULL;
+    g_autoptr(GArray)                               pri_unique_id = NULL;
+    g_autofree gchar                               *pri_build_id = NULL;
 
     get_stored_image_finish (client,
                              res,
-                             &modem_image_id.unique_id,
-                             &modem_image_id.build_id,
-                             &pri_image_id.unique_id,
-                             &pri_image_id.build_id);
+                             &modem_unique_id,
+                             &modem_build_id,
+                             &pri_unique_id,
+                             &pri_build_id);
 
-    if (modem_image_id.unique_id && modem_image_id.build_id &&
-        pri_image_id.unique_id && pri_image_id.build_id) {
+    if (modem_unique_id && modem_build_id &&
+        pri_unique_id && pri_build_id) {
         g_printerr ("error: cannot specify multiple images to delete\n");
         operation_shutdown (FALSE);
         return;
     }
 
     input = qmi_message_dms_delete_stored_image_input_new ();
-    if (modem_image_id.unique_id && modem_image_id.build_id)
-        qmi_message_dms_delete_stored_image_input_set_image (input, &modem_image_id, NULL);
-    else if (pri_image_id.unique_id && pri_image_id.build_id)
-        qmi_message_dms_delete_stored_image_input_set_image (input, &pri_image_id, NULL);
+    if (modem_unique_id && modem_build_id)
+        qmi_message_dms_delete_stored_image_input_set_image_details (input,
+                                                                     QMI_DMS_FIRMWARE_IMAGE_TYPE_MODEM,
+                                                                     modem_unique_id,
+                                                                     modem_build_id,
+                                                                     NULL);
+    else if (pri_unique_id && pri_build_id)
+        qmi_message_dms_delete_stored_image_input_set_image_details (input,
+                                                                     QMI_DMS_FIRMWARE_IMAGE_TYPE_PRI,
+                                                                     pri_unique_id,
+                                                                     pri_build_id,
+                                                                     NULL);
     else {
         g_printerr ("error: didn't specify correctly an image to delete\n");
         operation_shutdown (FALSE);
@@ -3420,14 +3460,6 @@ get_stored_image_delete_ready (QmiClientDms *client,
         NULL,
         (GAsyncReadyCallback)delete_stored_image_ready,
         NULL);
-    qmi_message_dms_delete_stored_image_input_unref (input);
-
-    g_free (modem_image_id.build_id);
-    if (modem_image_id.unique_id)
-        g_array_unref (modem_image_id.unique_id);
-    g_free (pri_image_id.build_id);
-    if (pri_image_id.unique_id)
-        g_array_unref (pri_image_id.unique_id);
 }
 
 #endif /* HAVE_QMI_MESSAGE_DMS_SET_FIRMWARE_PREFERENCE
@@ -3511,39 +3543,159 @@ set_firmware_preference_context_clear (SetFirmwarePreferenceContext *firmware_pr
     g_free (firmware_preference_ctx->pri_image_id.build_id);
 }
 
-static QmiMessageDmsSetFirmwarePreferenceInput *
-set_firmware_preference_input_create (const gchar                  *str,
-                                      SetFirmwarePreferenceContext *firmware_preference_ctx)
-{
-    QmiMessageDmsSetFirmwarePreferenceInput *input;
-    GArray *array;
-    gchar **split;
+typedef struct {
+    gchar    *firmware_version;
+    gchar    *config_version;
+    gchar    *carrier;
+    gint      modem_storage_index;
+    gboolean  override_download;
+    gboolean  override_download_set;
+} SetFirmwarePreferenceProperties;
 
-    /* Prepare inputs.
-     * Format of the string is:
-     *    "[(fwver),(config),(carrier)]"
+static void
+set_firmware_preference_properties_clear (SetFirmwarePreferenceProperties *props)
+{
+    g_free (props->firmware_version);
+    g_free (props->config_version);
+    g_free (props->carrier);
+}
+
+static gboolean
+set_firmware_preference_properties_handle (const gchar  *key,
+                                           const gchar  *value,
+                                           GError      **error,
+                                           gpointer      user_data)
+{
+    SetFirmwarePreferenceProperties *props = user_data;
+
+    if (!value || !value[0]) {
+        g_set_error (error,
+                     QMI_CORE_ERROR,
+                     QMI_CORE_ERROR_FAILED,
+                     "key '%s' required a value",
+                     key);
+        return FALSE;
+    }
+
+    if (g_ascii_strcasecmp (key, "firmware-version") == 0 && !props->firmware_version) {
+        props->firmware_version = g_strdup (value);
+        return TRUE;
+    }
+
+    if (g_ascii_strcasecmp (key, "config-version") == 0 && !props->config_version) {
+        props->config_version = g_strdup (value);
+        return TRUE;
+    }
+
+    if (g_ascii_strcasecmp (key, "carrier") == 0 && !props->carrier) {
+        props->carrier = g_strdup (value);
+        return TRUE;
+    }
+
+    if (g_ascii_strcasecmp (key, "override-download") == 0 && !props->override_download_set) {
+        if (!qmicli_read_yes_no_from_string (value, &(props->override_download))) {
+            g_set_error (error,
+                         QMI_CORE_ERROR,
+                         QMI_CORE_ERROR_FAILED,
+                         "unknown override-download '%s'",
+                         value);
+            return FALSE;
+        }
+        props->override_download_set = TRUE;
+        return TRUE;
+    }
+
+    if (g_ascii_strcasecmp (key, "modem-storage-index") == 0 && props->modem_storage_index == -1) {
+        props->modem_storage_index = atoi (value);
+        if (props->modem_storage_index < 0 || props->modem_storage_index > G_MAXUINT8) {
+            g_set_error (error,
+                         QMI_CORE_ERROR,
+                         QMI_CORE_ERROR_FAILED,
+                         "invalid modem-storage-index '%s'",
+                         value);
+            return FALSE;
+        }
+        return TRUE;
+    }
+
+    g_set_error (error,
+                 QMI_CORE_ERROR,
+                 QMI_CORE_ERROR_FAILED,
+                 "unrecognized or duplicate option '%s'",
+                 key);
+    return FALSE;
+}
+
+static QmiMessageDmsSetFirmwarePreferenceInput *
+set_firmware_preference_input_create (const gchar                   *str,
+                                      SetFirmwarePreferenceContext  *firmware_preference_ctx,
+                                      GError                       **error)
+{
+    g_autoptr(QmiMessageDmsSetFirmwarePreferenceInput) input = NULL;
+    g_autoptr(GArray)                                  array = NULL;
+
+    SetFirmwarePreferenceProperties props = {
+        .firmware_version = NULL,
+        .config_version = NULL,
+        .carrier = NULL,
+        .modem_storage_index = -1,
+        .override_download = FALSE,
+        .override_download_set = FALSE,
+    };
+
+    /* New key=value format */
+    if (strchr (str, '=')) {
+        g_autoptr(GError) parse_error = NULL;
+
+        if (!qmicli_parse_key_value_string (str,
+                                            &parse_error,
+                                            set_firmware_preference_properties_handle,
+                                            &props)) {
+            g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
+                         "Couldn't parse input string: %s", parse_error->message);
+            set_firmware_preference_properties_clear (&props);
+            return NULL;
+        }
+
+        if (!props.firmware_version || !props.config_version || !props.carrier) {
+            g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
+                         "Missing mandatory parameters: 'firmware-version', 'config-version' and 'carrier' are mandatory");
+            set_firmware_preference_properties_clear (&props);
+            return NULL;
+        }
+    }
+    /* Old non key=value format, like this:
+     *    "[(firmware_version),(config_version),(carrier)]"
      */
-    split = g_strsplit (str, ",", -1);
-    if (g_strv_length (split) != 3) {
-        g_printerr ("error: invalid format string, expected 3 elements: [(fwver),(config),(carrier)]\n");
-        g_strfreev (split);
-        return NULL;
+    else {
+        g_auto(GStrv) split = NULL;
+
+        split = g_strsplit (str, ",", -1);
+        if (g_strv_length (split) != 3) {
+            g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
+                         "Invalid format string, expected 3 elements: 'firmware-version', 'config-version' and 'carrier'");
+            return NULL;
+        }
+
+        props.firmware_version = g_strdup (split[0]);
+        props.config_version   = g_strdup (split[1]);
+        props.carrier          = g_strdup (split[2]);
     }
 
     /* modem unique id is the fixed wildcard string '?_?' matching any pri.
-     * modem build id format is "(fwver)_?", matching any carrier */
+     * modem build id format is "(firmware_version)_?", matching any carrier */
     firmware_preference_ctx->modem_image_id.type = QMI_DMS_FIRMWARE_IMAGE_TYPE_MODEM;
     firmware_preference_ctx->modem_image_id.unique_id = g_array_sized_new (FALSE, TRUE, 1, 16);
     g_array_insert_vals (firmware_preference_ctx->modem_image_id.unique_id, 0, "?_?", 3);
     g_array_set_size (firmware_preference_ctx->modem_image_id.unique_id, 16);
-    firmware_preference_ctx->modem_image_id.build_id = g_strdup_printf ("%s_?", split[0]);
+    firmware_preference_ctx->modem_image_id.build_id = g_strdup_printf ("%s_?", props.firmware_version);
 
-    /* pri unique id is the "(config)" input */
+    /* pri unique id is the "(config_version)" input */
     firmware_preference_ctx->pri_image_id.type = QMI_DMS_FIRMWARE_IMAGE_TYPE_PRI;
     firmware_preference_ctx->pri_image_id.unique_id = g_array_sized_new (FALSE, TRUE, 1, 16);
-    g_array_insert_vals (firmware_preference_ctx->pri_image_id.unique_id, 0, split[1], strlen (split[1]));
+    g_array_insert_vals (firmware_preference_ctx->pri_image_id.unique_id, 0, props.config_version, strlen (props.config_version));
     g_array_set_size (firmware_preference_ctx->pri_image_id.unique_id, 16);
-    firmware_preference_ctx->pri_image_id.build_id = g_strdup_printf ("%s_%s", split[0], split[2]);
+    firmware_preference_ctx->pri_image_id.build_id = g_strdup_printf ("%s_%s", props.firmware_version, props.carrier);
 
     /* Create an array with both images, the contents of each image struct,
      * though, aren't owned by the array (i.e. need to be disposed afterwards
@@ -3555,11 +3707,15 @@ set_firmware_preference_input_create (const gchar                  *str,
     /* The input bundle takes a reference to the array itself */
     input = qmi_message_dms_set_firmware_preference_input_new ();
     qmi_message_dms_set_firmware_preference_input_set_list (input, array, NULL);
-    g_array_unref (array);
 
-    g_strfreev (split);
+    /* Other optional settings */
+    if (props.modem_storage_index >= 0)
+        qmi_message_dms_set_firmware_preference_input_set_modem_storage_index (input, (guint8)props.modem_storage_index, NULL);
+    if (props.override_download_set)
+        qmi_message_dms_set_firmware_preference_input_set_download_override (input, props.override_download, NULL);
 
-    return input;
+    set_firmware_preference_properties_clear (&props);
+    return g_steal_pointer (&input);
 }
 
 #endif /* HAVE_QMI_MESSAGE_DMS_SET_FIRMWARE_PREFERENCE */
@@ -4154,6 +4310,64 @@ foxconn_get_firmware_version_ready (QmiClientDms *client,
 }
 
 #endif /* HAVE_QMI_MESSAGE_DMS_FOXCONN_GET_FIRMWARE_VERSION */
+
+#if defined HAVE_QMI_MESSAGE_DMS_FOXCONN_SET_FCC_AUTHENTICATION
+
+static void
+foxconn_set_fcc_authentication_ready (QmiClientDms *client,
+                                      GAsyncResult *res)
+{
+    g_autoptr(QmiMessageDmsFoxconnSetFccAuthenticationOutput) output = NULL;
+    g_autoptr(GError)                                         error = NULL;
+
+    output = qmi_client_dms_foxconn_set_fcc_authentication_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_dms_foxconn_set_fcc_authentication_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't run Foxconn FCC authentication: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("[%s] Successfully run Foxconn FCC authentication\n",
+             qmi_device_get_path_display (ctx->device));
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_DMS_FOXCONN_SET_FCC_AUTHENTICATION */
+
+#if defined HAVE_QMI_MESSAGE_DMS_FOXCONN_SET_FCC_AUTHENTICATION_V2
+
+static void
+foxconn_set_fcc_authentication_v2_ready (QmiClientDms *client,
+                                         GAsyncResult *res)
+{
+    g_autoptr(QmiMessageDmsFoxconnSetFccAuthenticationV2Output) output = NULL;
+    g_autoptr(GError)                                           error = NULL;
+
+    output = qmi_client_dms_foxconn_set_fcc_authentication_v2_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_dms_foxconn_set_fcc_authentication_v2_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't run Foxconn FCC authentication: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("[%s] Successfully run Foxconn FCC authentication v2\n",
+             qmi_device_get_path_display (ctx->device));
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_DMS_FOXCONN_SET_FCC_AUTHENTICATION_V2 */
 
 #if defined HAVE_QMI_MESSAGE_DMS_GET_MAC_ADDRESS
 
@@ -4931,14 +5145,16 @@ qmicli_dms_run (QmiDevice *device,
 
 #if defined HAVE_QMI_MESSAGE_DMS_SET_FIRMWARE_PREFERENCE
     if (set_firmware_preference_str) {
-        QmiMessageDmsSetFirmwarePreferenceInput *input;
-        SetFirmwarePreferenceContext             firmware_preference_ctx;
+        g_autoptr(GError)                                  error = NULL;
+        g_autoptr(QmiMessageDmsSetFirmwarePreferenceInput) input = NULL;
+        SetFirmwarePreferenceContext                       firmware_preference_ctx;
 
         memset (&firmware_preference_ctx, 0, sizeof (firmware_preference_ctx));
 
         g_debug ("Asynchronously setting firmware preference...");
-        input = set_firmware_preference_input_create (set_firmware_preference_str, &firmware_preference_ctx);
+        input = set_firmware_preference_input_create (set_firmware_preference_str, &firmware_preference_ctx, &error);
         if (!input) {
+            g_printerr ("error: %s\n", error->message);
             operation_shutdown (FALSE);
             return;
         }
@@ -4951,7 +5167,6 @@ qmicli_dms_run (QmiDevice *device,
             (GAsyncReadyCallback)dms_set_firmware_preference_ready,
             NULL);
         set_firmware_preference_context_clear (&firmware_preference_ctx);
-        qmi_message_dms_set_firmware_preference_input_unref (input);
         return;
     }
 #endif
@@ -5143,6 +5358,70 @@ qmicli_dms_run (QmiDevice *device,
                                                      (GAsyncReadyCallback)foxconn_get_firmware_version_ready,
                                                      NULL);
         qmi_message_dms_foxconn_get_firmware_version_input_unref (input);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_DMS_FOXCONN_SET_FCC_AUTHENTICATION
+    if (foxconn_set_fcc_authentication_int >= 0) {
+        g_autoptr(QmiMessageDmsFoxconnSetFccAuthenticationInput) input = NULL;
+
+        if (foxconn_set_fcc_authentication_int > 0xFF) {
+            g_printerr ("error: magic value out of [0,255] range\n");
+            operation_shutdown (FALSE);
+            return;
+        }
+
+        g_debug ("Asynchronously running Foxconn FCC authentication...");
+
+        input = qmi_message_dms_foxconn_set_fcc_authentication_input_new ();
+        qmi_message_dms_foxconn_set_fcc_authentication_input_set_value (input, (guint8)foxconn_set_fcc_authentication_int, NULL);
+        qmi_client_dms_foxconn_set_fcc_authentication (ctx->client,
+                                                       input,
+                                                       10,
+                                                       ctx->cancellable,
+                                                       (GAsyncReadyCallback)foxconn_set_fcc_authentication_ready,
+                                                       NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_DMS_FOXCONN_SET_FCC_AUTHENTICATION_V2
+    if (foxconn_set_fcc_authentication_v2_str) {
+        g_autoptr(QmiMessageDmsFoxconnSetFccAuthenticationV2Input) input = NULL;
+        g_auto(GStrv) split = NULL;
+        gulong magic_number;
+
+        split = g_strsplit (foxconn_set_fcc_authentication_v2_str, ",", -1);
+        if (g_strv_length (split) < 2) {
+            g_printerr ("error: missing fields\n");
+            operation_shutdown (FALSE);
+            return;
+        }
+        if (g_strv_length (split) > 2) {
+            g_printerr ("error: too many fields given\n");
+            operation_shutdown (FALSE);
+            return;
+        }
+
+        magic_number = strtoul (split[1], NULL, 10);
+        if (magic_number > 0xFF) {
+            g_printerr ("error: magic number value out of [0,255] range\n");
+            operation_shutdown (FALSE);
+            return;
+        }
+
+        g_debug ("Asynchronously running Foxconn FCC authentication v2...");
+
+        input = qmi_message_dms_foxconn_set_fcc_authentication_v2_input_new ();
+        qmi_message_dms_foxconn_set_fcc_authentication_v2_input_set_magic_string (input, split[0], NULL);
+        qmi_message_dms_foxconn_set_fcc_authentication_v2_input_set_magic_number (input, magic_number, NULL);
+        qmi_client_dms_foxconn_set_fcc_authentication_v2 (ctx->client,
+                                                          input,
+                                                          10,
+                                                          ctx->cancellable,
+                                                          (GAsyncReadyCallback)foxconn_set_fcc_authentication_v2_ready,
+                                                          NULL);
         return;
     }
 #endif
