@@ -30,6 +30,7 @@
 #include <gio/gio.h>
 
 #include <libqmi-glib.h>
+#include <qmi-common.h>
 
 #include "qmicli.h"
 #include "qmicli-helpers.h"
@@ -65,6 +66,9 @@ static gchar *change_provisioning_session_str;
 static gchar *switch_slot_str;
 static gchar *depersonalization_str;
 static gchar *remote_unlock_str;
+static gchar *open_logical_channel_str;
+static gchar *close_logical_channel_str;
+static gchar *send_apdu_str;
 static gchar **monitor_refresh_file_array;
 static gboolean get_card_status_flag;
 static gboolean get_supported_messages_flag;
@@ -81,26 +85,26 @@ static gboolean get_configuration_flag;
 static GOptionEntry entries[] = {
 #if defined HAVE_QMI_MESSAGE_UIM_SET_PIN_PROTECTION
     { "uim-set-pin-protection", 0, 0, G_OPTION_ARG_STRING, &set_pin_protection_str,
-      "Set PIN protection",
-      "[(PIN1|PIN2|UPIN),(disable|enable),(current PIN)]"
+      "Set PIN protection (allowed keys: session-type ((primary|secondary|tertiary|quarternary|quinary)-gw-provisioning|card-slot-[1-5]))",
+      "[(PIN1|PIN2|UPIN),(disable|enable),(current PIN)[,\"key=value,...\"]]"
     },
 #endif
 #if defined HAVE_QMI_MESSAGE_UIM_VERIFY_PIN
     { "uim-verify-pin", 0, 0, G_OPTION_ARG_STRING, &verify_pin_str,
-      "Verify PIN",
-      "[(PIN1|PIN2|UPIN),(current PIN)]",
+      "Verify PIN (allowed keys: session-type ((primary|secondary|tertiary|quarternary|quinary)-gw-provisioning|card-slot-[1-5]))",
+      "[(PIN1|PIN2|UPIN),(current PIN)[,\"key=value,...\"]]",
     },
 #endif
 #if defined HAVE_QMI_MESSAGE_UIM_UNBLOCK_PIN
     { "uim-unblock-pin", 0, 0, G_OPTION_ARG_STRING, &unblock_pin_str,
-      "Unblock PIN",
-      "[(PIN1|PIN2|UPIN),(PUK),(new PIN)]",
+      "Unblock PIN (allowed keys: session-type ((primary|secondary|tertiary|quarternary|quinary)-gw-provisioning|card-slot-[1-5]))",
+      "[(PIN1|PIN2|UPIN),(PUK),(new PIN)[,\"key=value,...\"]]",
     },
 #endif
 #if defined HAVE_QMI_MESSAGE_UIM_CHANGE_PIN
     { "uim-change-pin", 0, 0, G_OPTION_ARG_STRING, &change_pin_str,
-      "Change PIN",
-      "[(PIN1|PIN2|UPIN),(old PIN),(new PIN)]",
+      "Change PIN (allowed keys: session-type ((primary|secondary|tertiary|quarternary|quinary)-gw-provisioning|card-slot-[1-5]))",
+      "[(PIN1|PIN2|UPIN),(old PIN),(new PIN)[,\"key=value,...\"]]",
     },
 #endif
 #if defined HAVE_QMI_MESSAGE_UIM_READ_TRANSPARENT
@@ -147,7 +151,7 @@ static GOptionEntry entries[] = {
 #endif
 #if defined HAVE_QMI_MESSAGE_UIM_CHANGE_PROVISIONING_SESSION
     { "uim-change-provisioning-session", 0, 0, G_OPTION_ARG_STRING, &change_provisioning_session_str,
-      "Change provisioning session (allowed keys: session-type, activate, slot, aid)",
+      "Change provisioning session (allowed keys: session-type ((primary|secondary|tertiary|quarternary|quinary)-gw-provisioning), activate (yes|no), slot, aid)",
       "[\"key=value,...\"]"
     },
 #endif
@@ -205,6 +209,24 @@ static GOptionEntry entries[] = {
       "[XX:XX:...]"
     },
 #endif
+#if defined HAVE_QMI_MESSAGE_UIM_OPEN_LOGICAL_CHANNEL
+    { "uim-open-logical-channel", 0, 0, G_OPTION_ARG_STRING, &open_logical_channel_str,
+      "Open logical channel",
+      "[(slot number),(aid)]"
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_UIM_LOGICAL_CHANNEL
+    { "uim-close-logical-channel", 0, 0, G_OPTION_ARG_STRING, &close_logical_channel_str,
+      "Close logical channel",
+      "[(slot number),(channel ID)]"
+    },
+#endif
+#if defined HAVE_QMI_MESSAGE_UIM_SEND_APDU
+    { "uim-send-apdu", 0, 0, G_OPTION_ARG_STRING, &send_apdu_str,
+      "Send APDU",
+      "[(slot number),(channel ID),(apdu)]"
+    },
+#endif
     { "uim-noop", 0, 0, G_OPTION_ARG_NONE, &noop_flag,
       "Just allocate or release a UIM client. Use with `--client-no-release-cid' and/or `--client-cid'",
       NULL
@@ -250,6 +272,9 @@ qmicli_uim_options_enabled (void)
                  !!monitor_refresh_file_array +
                  !!depersonalization_str +
                  !!remote_unlock_str +
+                 !!open_logical_channel_str +
+                 !!close_logical_channel_str +
+                 !!send_apdu_str +
                  get_card_status_flag +
                  get_supported_messages_flag +
                  get_slot_status_flag +
@@ -299,26 +324,73 @@ operation_shutdown (gboolean operation_status)
     qmicli_async_operation_done (operation_status, FALSE);
 }
 
+#if defined HAVE_QMI_MESSAGE_UIM_SET_PIN_PROTECTION || \
+    defined HAVE_QMI_MESSAGE_UIM_VERIFY_PIN || \
+    defined HAVE_QMI_MESSAGE_UIM_UNBLOCK_PIN ||\
+    defined HAVE_QMI_MESSAGE_UIM_CHANGE_PIN
+
+static gboolean
+provisioning_session_type_handle (const gchar *key,
+                                  const gchar *value,
+                                  GError     **error,
+                                  gpointer     user_data)
+{
+    QmiUimSessionType *session_type = (QmiUimSessionType *) user_data;
+
+    if (!value || !value[0]) {
+        g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
+                     "key '%s' requires a value", key);
+        return FALSE;
+    }
+
+    if (g_ascii_strcasecmp (key, "session-type") == 0) {
+        if (!qmicli_read_uim_session_type_from_string (value, session_type)) {
+            g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
+                         "invalid session type value: %s (not a valid enum)", value);
+            return FALSE;
+        }
+        return TRUE;
+    }
+
+    g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_FAILED,
+                 "Unrecognized option '%s'", key);
+    return FALSE;
+}
+
+#endif
+
 #if defined HAVE_QMI_MESSAGE_UIM_SET_PIN_PROTECTION
 
 static QmiMessageUimSetPinProtectionInput *
 set_pin_protection_input_create (const gchar *str)
 {
     QmiMessageUimSetPinProtectionInput *input = NULL;
+    QmiUimSessionType session_type = QMI_UIM_SESSION_TYPE_CARD_SLOT_1;
     gchar **split;
+    guint len_split;
+    GError *error = NULL;
     QmiUimPinId pin_id;
     gboolean enable_disable;
     gchar *current_pin;
 
     /* Prepare inputs.
      * Format of the string is:
-     *    "[(PIN1|PIN2|UPIN),(disable|enable),(current PIN)]"
+     *    "[(PIN1|PIN2|UPIN),(disable|enable),(current PIN)[,'key=value,...']]" with valid key = (session-type)
      */
-    split = g_strsplit (str, ",", -1);
-    if (qmicli_read_uim_pin_id_from_string (split[0], &pin_id) &&
+    split = g_strsplit (str, ",", 4);
+    len_split = g_strv_length (split);
+
+    /* Parse optional kv-pairs */
+    if (len_split >= 4) {
+        if (!qmicli_parse_key_value_string (split[3], &error, provisioning_session_type_handle, &session_type)) {
+            g_printerr ("error: could not parse input string '%s': %s\n", str, error->message);
+        }
+    }
+
+    if (error == NULL &&
+        qmicli_read_uim_pin_id_from_string (split[0], &pin_id) &&
         qmicli_read_enable_disable_from_string (split[1], &enable_disable) &&
         qmicli_read_non_empty_string (split[2], "current PIN", &current_pin)) {
-        GError *error = NULL;
         GArray *placeholder_aid;
 
         placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
@@ -332,18 +404,18 @@ set_pin_protection_input_create (const gchar *str)
                 &error) ||
             !qmi_message_uim_set_pin_protection_input_set_session (
                 input,
-                QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
+                session_type,
                 placeholder_aid, /* ignored */
                 &error)) {
             g_printerr ("error: couldn't create input data bundle: '%s'\n",
                         error->message);
-            g_error_free (error);
             qmi_message_uim_set_pin_protection_input_unref (input);
             input = NULL;
         }
         g_array_unref (placeholder_aid);
     }
     g_strfreev (split);
+    g_clear_error (&error);
 
     return input;
 }
@@ -403,18 +475,30 @@ static QmiMessageUimVerifyPinInput *
 verify_pin_input_create (const gchar *str)
 {
     QmiMessageUimVerifyPinInput *input = NULL;
+    QmiUimSessionType session_type = QMI_UIM_SESSION_TYPE_CARD_SLOT_1;
     gchar **split;
+    guint len_split;
+    GError *error = NULL;
     QmiUimPinId pin_id;
     gchar *current_pin;
 
     /* Prepare inputs.
      * Format of the string is:
-     *    "[(PIN1|PIN2),(current PIN)]"
+     *    "[(PIN1|PIN2),(current PIN)[,'key=value,...']]" with valid key = (session-type)
      */
-    split = g_strsplit (str, ",", -1);
-    if (qmicli_read_uim_pin_id_from_string (split[0], &pin_id) &&
+    split = g_strsplit (str, ",", 3);
+    len_split = g_strv_length (split);
+
+    /* Parse optional kv-pairs */
+    if (len_split >= 3) {
+        if (!qmicli_parse_key_value_string (split[2], &error, provisioning_session_type_handle, &session_type)) {
+            g_printerr ("error: could not parse input string '%s': %s\n", str, error->message);
+        }
+    }
+
+    if (error == NULL &&
+        qmicli_read_uim_pin_id_from_string (split[0], &pin_id) &&
         qmicli_read_non_empty_string (split[1], "current PIN", &current_pin)) {
-        GError *error = NULL;
         GArray *placeholder_aid;
 
         placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
@@ -427,18 +511,18 @@ verify_pin_input_create (const gchar *str)
                 &error) ||
             !qmi_message_uim_verify_pin_input_set_session (
                 input,
-                QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
+                session_type,
                 placeholder_aid, /* ignored */
                 &error)) {
             g_printerr ("error: couldn't create input data bundle: '%s'\n",
                         error->message);
-            g_error_free (error);
             qmi_message_uim_verify_pin_input_unref (input);
             input = NULL;
         }
         g_array_unref (placeholder_aid);
     }
     g_strfreev (split);
+    g_clear_error (&error);
 
     return input;
 }
@@ -498,20 +582,32 @@ static QmiMessageUimUnblockPinInput *
 unblock_pin_input_create (const gchar *str)
 {
     QmiMessageUimUnblockPinInput *input = NULL;
+    QmiUimSessionType session_type = QMI_UIM_SESSION_TYPE_CARD_SLOT_1;
     gchar **split;
+    guint len_split;
+    GError *error = NULL;
     QmiUimPinId pin_id;
     gchar *puk;
     gchar *new_pin;
 
     /* Prepare inputs.
      * Format of the string is:
-     *    "[(PIN|PIN2),(PUK),(new PIN)]"
+     *    "[(PIN|PIN2),(PUK),(new PIN)[,'key=value,...']]" with valid key = (session-type)
      */
-    split = g_strsplit (str, ",", -1);
-    if (qmicli_read_uim_pin_id_from_string (split[0], &pin_id) &&
+    split = g_strsplit (str, ",", 4);
+    len_split = g_strv_length (split);
+
+    /* Parse optional kv-pairs */
+    if (len_split >= 4) {
+        if (!qmicli_parse_key_value_string (split[3], &error, provisioning_session_type_handle, &session_type)) {
+            g_printerr ("error: could not parse input string '%s': %s\n", str, error->message);
+        }
+    }
+
+    if (error == NULL &&
+        qmicli_read_uim_pin_id_from_string (split[0], &pin_id) &&
         qmicli_read_non_empty_string (split[1], "PUK", &puk) &&
         qmicli_read_non_empty_string (split[2], "new PIN", &new_pin)) {
-        GError *error = NULL;
         GArray *placeholder_aid;
 
         placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
@@ -525,7 +621,7 @@ unblock_pin_input_create (const gchar *str)
                 &error) ||
             !qmi_message_uim_unblock_pin_input_set_session (
                 input,
-                QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
+                session_type,
                 placeholder_aid, /* ignored */
                 &error)) {
             g_printerr ("error: couldn't create input data bundle: '%s'\n",
@@ -537,6 +633,7 @@ unblock_pin_input_create (const gchar *str)
         g_array_unref (placeholder_aid);
     }
     g_strfreev (split);
+    g_clear_error (&error);
 
     return input;
 }
@@ -596,20 +693,32 @@ static QmiMessageUimChangePinInput *
 change_pin_input_create (const gchar *str)
 {
     QmiMessageUimChangePinInput *input = NULL;
+    QmiUimSessionType session_type = QMI_UIM_SESSION_TYPE_CARD_SLOT_1;
     gchar **split;
+    guint len_split;
+    GError *error = NULL;
     QmiUimPinId pin_id;
     gchar *old_pin;
     gchar *new_pin;
 
     /* Prepare inputs.
      * Format of the string is:
-     *    "[(PIN1|PIN2),(old PIN),(new PIN)]"
+     *    "[(PIN1|PIN2),(old PIN),(new PIN)[,'key=value,...']]" with valid key = (session-type)
      */
-    split = g_strsplit (str, ",", -1);
-    if (qmicli_read_uim_pin_id_from_string (split[0], &pin_id) &&
+    split = g_strsplit (str, ",", 4);
+    len_split = g_strv_length (split);
+
+    /* Parse optional kv-pairs */
+    if (len_split >= 4) {
+        if (!qmicli_parse_key_value_string (split[3], &error, provisioning_session_type_handle, &session_type)) {
+            g_printerr ("error: could not parse input string '%s': %s\n", str, error->message);
+        }
+    }
+
+    if (error == NULL &&
+        qmicli_read_uim_pin_id_from_string (split[0], &pin_id) &&
         qmicli_read_non_empty_string (split[1], "old PIN", &old_pin) &&
         qmicli_read_non_empty_string (split[2], "new PIN", &new_pin)) {
-        GError *error = NULL;
         GArray *placeholder_aid;
 
         placeholder_aid = g_array_new (FALSE, FALSE, sizeof (guint8));
@@ -623,7 +732,7 @@ change_pin_input_create (const gchar *str)
                 &error) ||
             !qmi_message_uim_change_pin_input_set_session (
                 input,
-                QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
+                session_type,
                 placeholder_aid, /* ignored */
                 &error)) {
             g_printerr ("error: couldn't create input data bundle: '%s'\n",
@@ -635,6 +744,7 @@ change_pin_input_create (const gchar *str)
         g_array_unref (placeholder_aid);
     }
     g_strfreev (split);
+    g_clear_error (&error);
 
     return input;
 }
@@ -739,12 +849,12 @@ power_on_sim_input_create (const gchar *slot_str)
     guint                         slot;
     GError                       *error = NULL;
 
-    input = qmi_message_uim_power_on_sim_input_new ();
-
     if (!qmicli_read_uint_from_string (slot_str, &slot) || (slot > G_MAXUINT8)) {
         g_printerr ("error: invalid slot number\n");
         return NULL;
     }
+
+    input = qmi_message_uim_power_on_sim_input_new ();
 
     if (!qmi_message_uim_power_on_sim_input_set_slot (input, slot, &error)) {
         g_printerr ("error: could not create SIM power on input: %s\n", error->message);
@@ -797,12 +907,12 @@ power_off_sim_input_create (const gchar *slot_str)
     guint                         slot;
     GError                       *error = NULL;
 
-    input = qmi_message_uim_power_off_sim_input_new ();
-
     if (!qmicli_read_uint_from_string (slot_str, &slot) || (slot > G_MAXUINT8)) {
         g_printerr ("error: invalid slot number\n");
         return NULL;
     }
+
+    input = qmi_message_uim_power_off_sim_input_new ();
 
     if (!qmi_message_uim_power_off_sim_input_set_slot (input, slot, &error)) {
         g_printerr ("error: could not create SIM power off input: %s\n", error->message);
@@ -2658,6 +2768,213 @@ remote_unlock_ready (QmiClientUim *client,
 
 #endif /* HAVE_QMI_MESSAGE_UIM_REMOTE_UNLOCK */
 
+#if defined HAVE_QMI_MESSAGE_UIM_OPEN_LOGICAL_CHANNEL
+
+static QmiMessageUimOpenLogicalChannelInput *
+open_logical_channel_input_create (const gchar *str)
+{
+    QmiMessageUimOpenLogicalChannelInput *input;
+    g_auto(GStrv)                         split = NULL;
+    guint                                 slot;
+    g_autoptr(GArray)                     aid_data = NULL;
+
+    /* Prepare inputs.
+     * Format of the string is:
+     *    "[(slot number),(aid)]"
+     */
+    split = g_strsplit (str, ",", -1);
+
+    if (!split[0] || !qmicli_read_uint_from_string (split[0], &slot) || (slot > G_MAXUINT8)) {
+        g_printerr ("error: invalid slot number\n");
+        return NULL;
+    }
+
+    /* AID is optional */
+    if (split[1]) {
+        if (!qmicli_read_raw_data_from_string (split[1], &aid_data)) {
+            g_printerr ("error: invalid AID data\n");
+            return NULL;
+        }
+    }
+
+    input = qmi_message_uim_open_logical_channel_input_new ();
+    qmi_message_uim_open_logical_channel_input_set_slot (input, slot, NULL);
+    if (aid_data)
+        qmi_message_uim_open_logical_channel_input_set_aid (input, aid_data, NULL);
+
+    return input;
+}
+
+static void
+open_logical_channel_ready (QmiClientUim *client,
+                            GAsyncResult *res)
+{
+    g_autoptr(QmiMessageUimOpenLogicalChannelOutput) output = NULL;
+    g_autoptr(GError)                                error = NULL;
+    guint8                                           channel_id;
+
+    output = qmi_client_uim_open_logical_channel_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_uim_open_logical_channel_output_get_result (output, &error)) {
+        g_printerr ("error: open logical channel operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_uim_open_logical_channel_output_get_channel_id (output, &channel_id, &error)) {
+        g_printerr ("error: get channel id operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("Open Logical Channel operation successfully completed: %d\n", channel_id);
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_UIM_OPEN_LOGICAL_CHANNEL */
+
+#if defined HAVE_QMI_MESSAGE_UIM_LOGICAL_CHANNEL
+
+static QmiMessageUimLogicalChannelInput *
+close_logical_channel_input_create (const gchar *str)
+{
+    QmiMessageUimLogicalChannelInput *input;
+    g_auto(GStrv)                     split = NULL;
+    guint                             slot;
+    guint                             channel_id;
+
+    /* Prepare inputs.
+     * Format of the string is:
+     *    "[(slot number),(channel ID)]"
+     */
+    split = g_strsplit (str, ",", -1);
+
+    if (!split[0] || !qmicli_read_uint_from_string (split[0], &slot) || (slot > G_MAXUINT8)) {
+        g_printerr ("error: invalid slot number\n");
+        return NULL;
+    }
+
+    if (!split[1] || !qmicli_read_uint_from_string (split[1], &channel_id) || (channel_id > G_MAXUINT8)) {
+        g_printerr ("error: invalid channel ID\n");
+        return NULL;
+    }
+
+    input = qmi_message_uim_logical_channel_input_new ();
+    qmi_message_uim_logical_channel_input_set_slot (input, slot, NULL);
+    qmi_message_uim_logical_channel_input_set_channel_id (input, channel_id, NULL);
+
+    return input;
+}
+
+static void
+close_logical_channel_ready (QmiClientUim *client,
+                             GAsyncResult *res)
+{
+    g_autoptr(QmiMessageUimLogicalChannelOutput) output = NULL;
+    g_autoptr(GError)                            error = NULL;
+
+    output = qmi_client_uim_logical_channel_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_uim_logical_channel_output_get_result (output, &error)) {
+        g_printerr ("error: close logical channel operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("Close Logical Channel operation successfully completed\n");
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_UIM_LOGICAL_CHANNEL */
+
+#if defined HAVE_QMI_MESSAGE_UIM_SEND_APDU
+
+static QmiMessageUimSendApduInput *
+send_apdu_input_create (const gchar *str)
+{
+    QmiMessageUimSendApduInput *input;
+    g_auto(GStrv)               split = NULL;
+    guint                       slot;
+    guint                       channel_id;
+    g_autoptr(GArray)           apdu_data = NULL;
+
+    /* Prepare inputs.
+     * Format of the string is:
+     *    "[(slot number),(channel ID),(apdu)]"
+     */
+    split = g_strsplit (str, ",", -1);
+
+    if (!split[0] || !qmicli_read_uint_from_string (split[0], &slot) || (slot > G_MAXUINT8)) {
+        g_printerr ("error: invalid slot number\n");
+        return NULL;
+    }
+
+    if (!split[1] || !qmicli_read_uint_from_string (split[1], &channel_id) || (channel_id > G_MAXUINT8)) {
+        g_printerr ("error: invalid channel ID\n");
+        return NULL;
+    }
+
+    if (!split[2] || !qmicli_read_raw_data_from_string (split[2], &apdu_data)) {
+        g_printerr ("error: invalid APDU data\n");
+        return NULL;
+    }
+
+    input = qmi_message_uim_send_apdu_input_new ();
+    qmi_message_uim_send_apdu_input_set_slot (input, slot, NULL);
+    qmi_message_uim_send_apdu_input_set_channel_id (input, channel_id, NULL);
+    qmi_message_uim_send_apdu_input_set_apdu (input, apdu_data, NULL);
+
+    return input;
+}
+
+static void
+send_apdu_ready (QmiClientUim *client,
+                 GAsyncResult *res)
+{
+    g_autoptr(QmiMessageUimSendApduOutput) output = NULL;
+    g_autoptr(GError)                      error = NULL;
+    GArray                                *apdu_res = NULL;
+    gchar                                 *apdu_res_hex;
+
+    output = qmi_client_uim_send_apdu_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_uim_send_apdu_output_get_result (output, &error)) {
+        g_printerr ("error: send apdu operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_uim_send_apdu_output_get_apdu_response (output, &apdu_res, &error)) {
+        g_printerr ("error: get apdu response operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("Send APDU operation successfully completed:");
+    apdu_res_hex = qmi_common_str_hex (apdu_res->data, apdu_res->len, ':');
+    g_print (" %s\n", apdu_res_hex);
+    g_free (apdu_res_hex);
+
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_UIM_SEND_APDU */
+
 void
 qmicli_uim_run (QmiDevice *device,
                 QmiClientUim *client,
@@ -3053,6 +3370,72 @@ qmicli_uim_run (QmiDevice *device,
                                       ctx->cancellable,
                                       (GAsyncReadyCallback)remote_unlock_ready,
                                       NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_UIM_OPEN_LOGICAL_CHANNEL
+    /* Request to open logical channel? */
+    if (open_logical_channel_str) {
+        g_autoptr(QmiMessageUimOpenLogicalChannelInput) input = NULL;
+
+        g_debug ("Asynchronously opening logical channel...");
+        input = open_logical_channel_input_create (open_logical_channel_str);
+        if (!input) {
+            operation_shutdown (FALSE);
+            return;
+        }
+
+        qmi_client_uim_open_logical_channel (ctx->client,
+                                             input,
+                                             10,
+                                             ctx->cancellable,
+                                             (GAsyncReadyCallback)open_logical_channel_ready,
+                                             NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_UIM_LOGICAL_CHANNEL
+    /* Request to close logical channel? */
+    if (close_logical_channel_str) {
+        g_autoptr(QmiMessageUimLogicalChannelInput) input = NULL;
+
+        g_debug ("Asynchronously closing logical channel...");
+        input = close_logical_channel_input_create (close_logical_channel_str);
+        if (!input) {
+            operation_shutdown (FALSE);
+            return;
+        }
+
+        qmi_client_uim_logical_channel (ctx->client,
+                                        input,
+                                        10,
+                                        ctx->cancellable,
+                                        (GAsyncReadyCallback)close_logical_channel_ready,
+                                        NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_UIM_SEND_APDU
+    /* Request to send APDU? */
+    if (send_apdu_str) {
+        g_autoptr(QmiMessageUimSendApduInput) input = NULL;
+
+        g_debug ("Asynchronously sending APDU...");
+        input = send_apdu_input_create (send_apdu_str);
+        if (!input) {
+            operation_shutdown (FALSE);
+            return;
+        }
+
+        qmi_client_uim_send_apdu (ctx->client,
+                                  input,
+                                  10,
+                                  ctx->cancellable,
+                                  (GAsyncReadyCallback)send_apdu_ready,
+                                  NULL);
         return;
     }
 #endif

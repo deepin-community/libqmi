@@ -35,6 +35,7 @@
     QMICLI_ENUM_LIST_ITEM (QmiDeviceExpectedDataFormat,                 device_expected_data_format,                  "device expected data format")   \
     QMICLI_ENUM_LIST_ITEM (QmiWdaLinkLayerProtocol,                     wda_link_layer_protocol,                      "link layer protocol")           \
     QMICLI_ENUM_LIST_ITEM (QmiWdaDataAggregationProtocol,               wda_data_aggregation_protocol,                "data aggregation protocol")     \
+    QMICLI_ENUM_LIST_ITEM (QmiWdaLoopBackState,                         wda_loop_back_state,                          "loopback state")                \
     QMICLI_ENUM_LIST_ITEM (QmiDataEndpointType,                         data_endpoint_type,                           "data endpoint type")            \
     QMICLI_ENUM_LIST_ITEM (QmiWdsAutoconnectSetting,                    wds_autoconnect_setting,                      "autoconnect setting")           \
     QMICLI_ENUM_LIST_ITEM (QmiWdsAutoconnectSettingRoaming,             wds_autoconnect_setting_roaming,              "autoconnect setting roaming")   \
@@ -56,7 +57,8 @@
     QMICLI_ENUM_LIST_ITEM (QmiWmsMessageClass,                          wms_message_class,                            "message class" )                \
     QMICLI_ENUM_LIST_ITEM (QmiWmsStorageType,                           wms_storage_type,                             "storage type" )                 \
     QMICLI_ENUM_LIST_ITEM (QmiWmsReceiptAction,                         wms_receipt_action,                           "receipt action" )               \
-    QMICLI_ENUM_LIST_ITEM (QmiFoxFirmwareVersionType,                   fox_firmware_version_type,                    "fox firmware version type")
+    QMICLI_ENUM_LIST_ITEM (QmiFoxFirmwareVersionType,                   fox_firmware_version_type,                    "fox firmware version type")     \
+    QMICLI_ENUM_LIST_ITEM (QmiGasFirmwareAutoSimMode,                   gas_firmware_auto_sim_mode,                   "gas firmware auto sim mode")
 
 #define QMICLI_ENUM_LIST_ITEM(TYPE,TYPE_UNDERSCORE,DESCR)        \
     gboolean qmicli_read_## TYPE_UNDERSCORE ##_from_string (const gchar *str, TYPE *out);

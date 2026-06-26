@@ -66,6 +66,7 @@ static gboolean force_network_search_flag;
 static gboolean get_operator_name_flag;
 static gboolean get_lte_cphy_ca_info_flag;
 static gboolean get_rf_band_info_flag;
+static gboolean get_network_time_flag;
 static gboolean get_drx_flag;
 static gboolean get_supported_messages_flag;
 static gboolean swi_get_status_flag;
@@ -181,6 +182,12 @@ static GOptionEntry entries[] = {
       NULL
     },
 #endif
+#if defined HAVE_QMI_MESSAGE_NAS_GET_NETWORK_TIME
+    { "nas-get-network-time", 0, 0, G_OPTION_ARG_NONE, &get_network_time_flag,
+      "Get Network Time",
+      NULL
+    },
+#endif
 #if defined HAVE_QMI_MESSAGE_NAS_GET_DRX
     { "nas-get-drx", 0, 0, G_OPTION_ARG_NONE, &get_drx_flag,
       "Get DRX",
@@ -254,6 +261,7 @@ qmicli_nas_options_enabled (void)
                  get_operator_name_flag +
                  get_lte_cphy_ca_info_flag +
                  get_rf_band_info_flag +
+                 get_network_time_flag +
                  get_drx_flag +
                  get_supported_messages_flag +
                  swi_get_status_flag +
@@ -1043,6 +1051,59 @@ get_home_network_ready (QmiClientNas *client,
 #if defined HAVE_QMI_MESSAGE_NAS_GET_PREFERRED_NETWORKS
 
 static void
+print_preferred_networks (GArray      *preferred_networks_array,
+                          GArray      *pcs_digit_array,
+                          const gchar *detail)
+{
+    if (preferred_networks_array) {
+        guint i;
+
+        g_print ("%s%sPreferred PLMN list:\n", detail ? detail : "", detail ? " " : "");
+        if (preferred_networks_array->len == 0)
+            g_print ("\t<empty>\n");
+        for (i = 0; i < preferred_networks_array->len; i++) {
+            QmiMessageNasGetPreferredNetworksOutputPreferredNetworksElement *element;
+            g_autofree gchar *access_tech_string = NULL;
+
+            /* Rely on the fact that QmiMessageNasGetPreferredNetworksOutputPreferredNetworksElement
+             * is the same layout as QmiMessageNasGetPreferredNetworksOutputStaticPreferredNetworksElement.
+             */
+            element = &g_array_index (preferred_networks_array, QmiMessageNasGetPreferredNetworksOutputPreferredNetworksElement, i);
+            access_tech_string = qmi_nas_plmn_access_technology_identifier_build_string_from_mask (element->radio_access_technology);
+            g_print ("[%u]:\n"
+                     "\tMCC: '%" G_GUINT16_FORMAT "'\n"
+                     "\tMNC: '%" G_GUINT16_FORMAT "'\n"
+                     "\tAccess Technology: '%s'\n",
+                     i,
+                     element->mcc,
+                     element->mnc,
+                     VALIDATE_MASK_NONE (access_tech_string));
+        }
+    }
+
+    if (pcs_digit_array) {
+        guint i;
+
+        g_print ("%s%sPCS digit status:\n", detail ? detail : "", detail ? " " : "");
+        if (pcs_digit_array->len == 0)
+            g_print ("\t<empty>\n");
+        for (i = 0; i < pcs_digit_array->len; i++) {
+            QmiMessageNasGetPreferredNetworksOutputMncPcsDigitIncludeStatusElement *element;
+
+            element = &g_array_index (pcs_digit_array, QmiMessageNasGetPreferredNetworksOutputMncPcsDigitIncludeStatusElement, i);
+            g_print ("[%u]:\n"
+                     "\tMCC: '%" G_GUINT16_FORMAT "'\n"
+                     "\tMNC: '%" G_GUINT16_FORMAT "'\n"
+                     "\tMCC with PCS digit: '%s'\n",
+                     i,
+                     element->mcc,
+                     element->mnc,
+                     element->includes_pcs_digit ? "yes" : "no");
+        }
+    }
+}
+
+static void
 get_preferred_networks_ready (QmiClientNas *client,
                               GAsyncResult *res)
 {
@@ -1070,49 +1131,19 @@ get_preferred_networks_ready (QmiClientNas *client,
     g_print ("[%s] Successfully got preferred networks:\n",
              qmi_device_get_path_display (ctx->device));
 
-    if (qmi_message_nas_get_preferred_networks_output_get_preferred_networks (output, &preferred_networks_array, NULL)) {
-        guint i;
+    /* User-defined networks */
+    preferred_networks_array = NULL;
+    qmi_message_nas_get_preferred_networks_output_get_preferred_networks (output, &preferred_networks_array, NULL);
+    pcs_digit_array = NULL;
+    qmi_message_nas_get_preferred_networks_output_get_mnc_pcs_digit_include_status (output, &pcs_digit_array, NULL);
+    print_preferred_networks (preferred_networks_array, pcs_digit_array, NULL);
 
-        g_print ("Preferred PLMN list:\n");
-        if (preferred_networks_array->len == 0)
-            g_print ("\t<empty>\n");
-        for (i = 0; i < preferred_networks_array->len; i++) {
-            QmiMessageNasGetPreferredNetworksOutputPreferredNetworksElement *element;
-            g_autofree gchar *access_tech_string = NULL;
-
-            element = &g_array_index (preferred_networks_array, QmiMessageNasGetPreferredNetworksOutputPreferredNetworksElement, i);
-            access_tech_string = qmi_nas_plmn_access_technology_identifier_build_string_from_mask (element->radio_access_technology);
-            g_print ("[%u]:\n"
-                     "\tMCC: '%" G_GUINT16_FORMAT "'\n"
-                     "\tMNC: '%" G_GUINT16_FORMAT "'\n"
-                     "\tAccess Technology: '%s'\n",
-                     i,
-                     element->mcc,
-                     element->mnc,
-                     VALIDATE_MASK_NONE (access_tech_string));
-        }
-    }
-
-    if (qmi_message_nas_get_preferred_networks_output_get_mnc_pcs_digit_include_status (output, &pcs_digit_array, NULL)) {
-        guint i;
-
-        g_print ("PCS digit status:\n");
-        if (pcs_digit_array->len == 0)
-            g_print ("\t<empty>\n");
-        for (i = 0; i < pcs_digit_array->len; i++) {
-            QmiMessageNasGetPreferredNetworksOutputMncPcsDigitIncludeStatusElement *element;
-
-            element = &g_array_index (pcs_digit_array, QmiMessageNasGetPreferredNetworksOutputMncPcsDigitIncludeStatusElement, i);
-            g_print ("[%u]:\n"
-                     "\tMCC: '%" G_GUINT16_FORMAT "'\n"
-                     "\tMNC: '%" G_GUINT16_FORMAT "'\n"
-                     "\tMCC with PCS digit: '%s'\n",
-                     i,
-                     element->mcc,
-                     element->mnc,
-                     element->includes_pcs_digit ? "yes" : "no");
-        }
-    }
+    /* Operator-defined networks */
+    preferred_networks_array = NULL;
+    qmi_message_nas_get_preferred_networks_output_get_static_preferred_networks (output, &preferred_networks_array, NULL);
+    pcs_digit_array = NULL;
+    qmi_message_nas_get_preferred_networks_output_get_static_mnc_pcs_digit_include_status (output, &pcs_digit_array, NULL);
+    print_preferred_networks (preferred_networks_array, pcs_digit_array, "Static");
 
     qmi_message_nas_get_preferred_networks_output_unref (output);
     operation_shutdown (TRUE);
@@ -3837,6 +3868,7 @@ get_operator_name_ready (QmiClientNas *client,
                      element->lac1,
                      element->lac2,
                      element->plmn_name_record_identifier);
+	    g_free(mnc);
         }
     }
 
@@ -3919,7 +3951,7 @@ set_plmn_name_input_plmn_create (const gchar *str)
         g_clear_pointer(&input, qmi_message_nas_get_plmn_name_input_unref);
     }
 
-    return input;
+    return g_steal_pointer (&input);
 }
 
 static void
@@ -4225,6 +4257,98 @@ get_rf_band_info_ready (QmiClientNas *client,
 }
 
 #endif /* HAVE_QMI_MESSAGE_NAS_GET_RF_BAND_INFORMATION */
+
+#if defined HAVE_QMI_MESSAGE_NAS_GET_NETWORK_TIME
+
+typedef struct {
+    guint16                         year;
+    guint8                          month;
+    guint8                          day;
+    guint8                          hour;
+    guint8                          minute;
+    guint8                          second;
+    QmiNasDayOfWeek                 day_of_week;
+    gint8                           tz_offset;
+    QmiNasDaylightSavingsAdjustment ds_adj;
+    QmiNasRadioInterface            radio_if;
+} NASNetworkTime;
+
+static void
+print_time (const char *prefix, const NASNetworkTime *nt)
+{
+    g_print ("%s Date:                            '%u-%02u-%02u'\n",
+             prefix, nt->year, nt->month, nt->day);
+    g_print ("%s Time:                            '%02u:%02u:%02u'\n",
+             prefix, nt->hour, nt->minute, nt->second);
+    g_print ("%s Day-of-Week:                     '%s'\n",
+             prefix, qmi_nas_day_of_week_get_string (nt->day_of_week));
+    g_print ("%s Timezone Offset:                 '%d' minutes\n",
+             prefix, nt->tz_offset * 15);
+    g_print ("%s Daylight Saving Time Adjustment: '%u' hours\n",
+             prefix, nt->ds_adj);
+    g_print ("%s Radio Interface:                 '%s'\n",
+             prefix, qmi_nas_radio_interface_get_string (nt->radio_if));
+}
+
+static void
+get_network_time_ready (QmiClientNas *client,
+                        GAsyncResult *res)
+{
+    g_autoptr(QmiMessageNasGetNetworkTimeOutput) output = NULL;
+    g_autoptr(GError)                            error = NULL;
+    NASNetworkTime                               nt = { 0 };
+
+    output = qmi_client_nas_get_network_time_finish (client, res, &error);
+    if (!output) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    if (!qmi_message_nas_get_network_time_output_get_result (output, &error)) {
+        g_printerr ("error: couldn't get network time: %s\n", error->message);
+        operation_shutdown (FALSE);
+        return;
+    }
+
+    g_print ("[%s] Successfully got network time:\n",
+             qmi_device_get_path_display (ctx->device));
+
+    if (qmi_message_nas_get_network_time_output_get_3gpp2_time (output,
+                                                                &nt.year,
+                                                                &nt.month,
+                                                                &nt.day,
+                                                                &nt.hour,
+                                                                &nt.minute,
+                                                                &nt.second,
+                                                                &nt.day_of_week,
+                                                                &nt.tz_offset,
+                                                                &nt.ds_adj,
+                                                                &nt.radio_if,
+                                                                NULL)) {
+        print_time ("\t3GPP2", &nt);
+    }
+
+    memset (&nt, 0, sizeof (nt));
+    if (qmi_message_nas_get_network_time_output_get_3gpp_time (output,
+                                                               &nt.year,
+                                                               &nt.month,
+                                                               &nt.day,
+                                                               &nt.hour,
+                                                               &nt.minute,
+                                                               &nt.second,
+                                                               &nt.day_of_week,
+                                                               &nt.tz_offset,
+                                                               &nt.ds_adj,
+                                                               &nt.radio_if,
+                                                               NULL)) {
+        print_time ("\t3GPP", &nt);
+    }
+
+    operation_shutdown (TRUE);
+}
+
+#endif /* HAVE_QMI_MESSAGE_NAS_GET_NETWORK_TIME */
 
 #if defined HAVE_QMI_MESSAGE_NAS_GET_DRX
 
@@ -4721,6 +4845,19 @@ qmicli_nas_run (QmiDevice *device,
                                                 ctx->cancellable,
                                                 (GAsyncReadyCallback)get_rf_band_info_ready,
                                                 NULL);
+        return;
+    }
+#endif
+
+#if defined HAVE_QMI_MESSAGE_NAS_GET_NETWORK_TIME
+    if (get_network_time_flag) {
+        g_debug ("Asynchronously getting network time ...");
+        qmi_client_nas_get_network_time (ctx->client,
+                                         NULL,
+                                         10,
+                                         ctx->cancellable,
+                                         (GAsyncReadyCallback)get_network_time_ready,
+                                         NULL);
         return;
     }
 #endif
