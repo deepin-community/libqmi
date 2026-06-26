@@ -34,6 +34,7 @@
 #include <string.h>
 #include <endian.h>
 
+#include "qmi-common.h"
 #include "qmi-message.h"
 #include "qmi-helpers.h"
 #include "qmi-enums-private.h"
@@ -226,7 +227,7 @@ qmi_message_get_service (QmiMessage *self)
     if (MESSAGE_IS_QMUX (self))
         return (QmiService)((struct full_message *)(self->data))->header.qmux.service;
 
-    return (QmiService)((struct full_message *)(self->data))->header.qrtr.service;
+    return (QmiService)GUINT16_FROM_LE (((struct full_message *)(self->data))->header.qrtr.service);
 }
 
 guint8
@@ -1464,6 +1465,15 @@ qmi_message_tlv_read_fixed_size_string (QmiMessage  *self,
         return TRUE;
     }
 
+    /* Empty string? */
+    if (!ptr[0]) {
+        /* terminator at start of string */
+        *out = '\0';
+        /* but update offset with the full expected length */
+        *offset = (*offset + string_length);
+        return TRUE;
+    }
+
     g_set_error (error, QMI_CORE_ERROR, QMI_CORE_ERROR_INVALID_DATA, "invalid string");
     return FALSE;
 }
@@ -1623,7 +1633,7 @@ qmi_message_get_tlv_printable (QmiMessage *self,
     g_return_val_if_fail (line_prefix != NULL, NULL);
     g_return_val_if_fail (raw != NULL, NULL);
 
-    value_hex = qmi_helpers_str_hex (raw, raw_length, ':');
+    value_hex = qmi_common_str_hex (raw, raw_length, ':');
     printable = g_strdup_printf ("%sTLV:\n"
                                  "%s  type   = 0x%02x\n"
                                  "%s  length = %" G_GSIZE_FORMAT "\n"

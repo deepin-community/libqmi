@@ -1,3 +1,35 @@
+libqmi (1.36.0-1) unstable; urgency=medium
+
+  * New upstream release
+  * Update symbols
+
+ -- Guido Günther <agx@sigxcpu.org>  Wed, 09 Apr 2025 10:04:46 +0200
+
+libqmi (1.35.95-2) unstable; urgency=medium
+
+  * Upload to unstable
+  * d/control: libgmi-glib-dev needs libmbim-glib-dev
+  * Add superficial autopkgtest
+
+ -- Guido Günther <agx@sigxcpu.org>  Tue, 11 Mar 2025 09:47:33 +0100
+
+libqmi (1.35.95-1) experimental; urgency=medium
+
+  * New upstream version 1.35.95
+  * Update symbols
+  * Use pkgconf rather than pkg-config
+  * Bump standards version
+
+ -- Guido Günther <agx@sigxcpu.org>  Sun, 09 Mar 2025 22:17:42 +0100
+
+libqmi (1.35.6-1) experimental; urgency=medium
+
+  * New upstream version 1.35.6
+  * Update symbols
+  * Drop patch, applied upstream
+
+ -- Guido Günther <agx@sigxcpu.org>  Thu, 12 Sep 2024 12:14:10 +0200
+
 libqmi (1.34.0-2) unstable; urgency=medium
 
   * d/patches: fix build on big endian architectures

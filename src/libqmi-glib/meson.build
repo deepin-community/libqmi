@@ -99,6 +99,7 @@ sources = files(
 deps = [
   generated_dep,
   gio_unix_dep,
+  libqmi_common_dep,
 ]
 
 if enable_mbim_qmux
@@ -177,6 +178,15 @@ if enable_gir and get_option('default_library') != 'static'
     header: 'libqmi-glib.h',
     export_packages: libname,
     install: true,
+  )
+endif
+
+if enable_qmi_username
+  configure_file(
+    input: '76-qmi-device-ownership.rules.in',
+    output: '@BASENAME@',
+    configuration: {'QMI_USERNAME': qmi_username},
+    install_dir: udev_udevdir / 'rules.d',
   )
 endif
 

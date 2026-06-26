@@ -1097,6 +1097,16 @@ G_DEPRECATED typedef int QmiDeprecatedWdsVerboseCallEndReasonCm;
 #define QMI_WDS_VERBOSE_CALL_END_REASON_CM_CONFIGURATION_FAILED (QmiDeprecatedWdsVerboseCallEndReasonCm) QMI_WDS_VERBOSE_CALL_END_REASON_CM_CONFERENCE_FAILED
 
 /**
+ * QMI_WDS_VERBOSE_CALL_END_REASON_CM_MESSAGE_EXCEED_MAX_L2_LIMIT:
+ *
+ * Message exceed max L2 limit.
+ *
+ * Deprecated: 1.36: Use the correct #QMI_WDS_VERBOSE_CALL_END_REASON_CM_MESSAGE_EXCEEDS_MAX_L2_LIMIT name instead.
+ */
+G_DEPRECATED typedef int QmiDeprecatedWdsVerboseCallEndReasonCm;
+#define QMI_WDS_VERBOSE_CALL_END_REASON_CM_MESSAGE_EXCEED_MAX_L2_LIMIT (QmiDeprecatedWdsVerboseCallEndReasonCm) QMI_WDS_VERBOSE_CALL_END_REASON_CM_MESSAGE_EXCEEDS_MAX_L2_LIMIT
+
+/**
  * qmi_message_tlv_read_gfloat:
  * @self: a #QmiMessage.
  * @tlv_offset: offset that was returned by qmi_message_tlv_read_init().
@@ -2426,6 +2436,16 @@ gboolean qmi_message_nas_get_cell_location_info_output_get_geran_info (
 
 #endif /* HAVE_QMI_MESSAGE_NAS_GET_CELL_LOCATION_INFO */
 
+/**
+ * QMI_NAS_NETWORK_SERVICE_DOMAIN_UNKNOWN:
+ *
+ * Unknown service domain.
+ *
+ * Deprecated: 1.36: Use the correct #QMI_NAS_NETWORK_SERVICE_DOMAIN_CAMPED name instead.
+ */
+G_DEPRECATED typedef int QmiDeprecatedNasNetworkServiceDomain;
+#define QMI_NAS_NETWORK_SERVICE_DOMAIN_UNKNOWN (QmiDeprecatedNasNetworkServiceDomain) QMI_NAS_NETWORK_SERVICE_DOMAIN_CAMPED
+
 #if defined HAVE_QMI_MESSAGE_WDS_GET_DEFAULT_PROFILE_NUMBER
 
 /**
@@ -3500,6 +3520,17 @@ gboolean qmi_message_nas_set_system_selection_preference_input_get_mnc_pds_digit
     GError **error);
 
 #endif /* HAVE_QMI_MESSAGE_NAS_SET_SYSTEM_SELECTION_PREFERENCE */
+
+/**
+ * QMI_NAS_DL_BANDWIDTH_INVALID:
+ *
+ * Download bandwidth is invalid.
+ *
+ * Since: 1.16
+ * Deprecated: 1.36: Use the correct #QMI_NAS_DL_BANDWIDTH_UNKNOWN name instead.
+ */
+G_DEPRECATED typedef int QmiDeprecatedNasDLBandwidth;
+#define QMI_NAS_DL_BANDWIDTH_INVALID (QmiDeprecatedNasDLBandwidth) QMI_NAS_DL_BANDWIDTH_UNKNOWN
 
 #if defined HAVE_QMI_MESSAGE_PDC_CONFIG_CHANGE ||          \
     defined HAVE_QMI_MESSAGE_PDC_SET_SELECTED_CONFIG ||    \

@@ -625,6 +625,8 @@ QmiWdsClientType
 QmiWdsIpSupportType
 QmiWdsApnTypeMask
 QmiWdsProfileChangeEvent
+QmiWdsAddressAllocationPreference
+QmiWdsPdpAccessControl
 QMI_WDS_RATE_UNAVAILABLE
 <SUBSECTION Methods>
 qmi_wds_ip_family_get_string
@@ -682,6 +684,8 @@ qmi_wds_client_type_get_string
 qmi_wds_ip_support_type_get_string
 qmi_wds_apn_type_mask_build_string_from_mask
 qmi_wds_profile_change_event_get_string
+qmi_wds_address_allocation_preference_get_string
+qmi_wds_pdp_access_control_get_string
 <SUBSECTION Standard>
 QMI_TYPE_WDS_AUTHENTICATION
 QMI_TYPE_WDS_AUTOCONNECT_SETTING
@@ -737,6 +741,8 @@ QMI_TYPE_WDS_CLIENT_TYPE
 QMI_TYPE_WDS_IP_SUPPORT_TYPE
 QMI_TYPE_WDS_APN_TYPE_MASK
 QMI_TYPE_WDS_PROFILE_CHANGE_EVENT
+QMI_TYPE_WDS_ADDRESS_ALLOCATION_PREFERENCE
+QMI_TYPE_WDS_PDP_ACCESS_CONTROL
 qmi_wds_authentication_get_type
 qmi_wds_autoconnect_setting_get_type
 qmi_wds_autoconnect_setting_roaming_get_type
@@ -791,6 +797,8 @@ qmi_wds_client_type_get_type
 qmi_wds_ip_support_type_get_type
 qmi_wds_apn_type_mask_get_type
 qmi_wds_profile_change_event_get_type
+qmi_wds_address_allocation_preference_get_type
+qmi_wds_pdp_access_control_get_type
 </SECTION>
 
 <SECTION>
@@ -961,6 +969,7 @@ QmiUimRefreshMode
 QmiUimRefreshStage
 QmiUimConfiguration
 QmiUimDepersonalizationOperation
+QmiUimFileControlInformation
 <SUBSECTION Methods>
 qmi_uim_event_registration_flag_build_string_from_mask
 qmi_uim_session_type_get_string
@@ -983,6 +992,7 @@ qmi_uim_refresh_mode_get_string
 qmi_uim_refresh_stage_get_string
 qmi_uim_configuration_build_string_from_mask
 qmi_uim_depersonalization_operation_get_string
+qmi_uim_file_control_information_get_string
 <SUBSECTION Standard>
 QMI_TYPE_UIM_EVENT_REGISTRATION_FLAG
 QMI_TYPE_UIM_SESSION_TYPE
@@ -1005,6 +1015,7 @@ QMI_TYPE_UIM_REFRESH_MODE
 QMI_TYPE_UIM_REFRESH_STAGE
 QMI_TYPE_UIM_CONFIGURATION
 QMI_TYPE_UIM_DEPERSONALIZATION_OPERATION
+QMI_TYPE_UIM_FILE_CONTROL_INFORMATION
 qmi_uim_event_registration_flag_get_type
 qmi_uim_session_type_get_type
 qmi_uim_file_type_get_type
@@ -1026,6 +1037,7 @@ qmi_uim_refresh_mode_get_type
 qmi_uim_refresh_stage_get_type
 qmi_uim_configuration_get_type
 qmi_uim_depersonalization_operation_get_type
+qmi_uim_file_control_information_get_type
 </SECTION>
 
 <SECTION>
@@ -1056,14 +1068,18 @@ qmi_oma_hfa_feature_done_state_get_type
 <TITLE>WDA enumerations and flags</TITLE>
 QmiWdaLinkLayerProtocol
 QmiWdaDataAggregationProtocol
+QmiWdaLoopBackState
 <SUBSECTION Methods>
 qmi_wda_link_layer_protocol_get_string
 qmi_wda_data_aggregation_protocol_get_string
+qmi_wda_loop_back_state_get_string
 <SUBSECTION Standard>
 QMI_TYPE_WDA_LINK_LAYER_PROTOCOL
 QMI_TYPE_WDA_DATA_AGGREGATION_PROTOCOL
+QMI_TYPE_WDA_LOOP_BACK_STATE
 qmi_wda_link_layer_protocol_get_type
 qmi_wda_data_aggregation_protocol_get_type
+qmi_wda_loop_back_state_get_type
 </SECTION>
 
 <SECTION>
@@ -1278,14 +1294,18 @@ qmi_qos_event_get_type
 <TITLE>GAS enumerations and flags</TITLE>
 QmiGasFirmwareListingMode
 QmiGasUsbCompositionEndpointType
+QmiGasFirmwareAutoSimMode
 <SUBSECTION Methods>
 qmi_gas_firmware_listing_mode_get_string
 qmi_gas_usb_composition_endpoint_type_get_string
+qmi_gas_firmware_auto_sim_mode_get_string
 <SUBSECTION Standard>
 QMI_TYPE_GAS_FIRMWARE_LISTING_MODE
 QMI_TYPE_GAS_USB_COMPOSITION_ENDPOINT_TYPE
+QMI_TYPE_GAS_FIRMWARE_AUTO_SIM_MODE
 qmi_gas_firmware_listing_mode_get_type
 qmi_gas_usb_composition_endpoint_type_get_type
+qmi_gas_firmware_auto_sim_mode_get_type
 </SECTION>
 
 <SECTION>
@@ -1575,6 +1595,7 @@ qmi_message_nas_set_system_selection_preference_input_get_mnc_pds_digit_include_
 qmi_indication_uim_slot_status_output_get_slot_eid_information
 qmi_message_uim_get_slot_status_output_get_slot_eid_information
 <SUBSECTION Symbols>
+QMI_NAS_DL_BANDWIDTH_INVALID
 QMI_NAS_SIM_REJECT_STATE_SIM_VAILABLE
 QMI_WDS_CDMA_CAUSE_CODE_NETWORK_ADDRESS_VACANT
 QMI_WDS_CDMA_CAUSE_CODE_NETWORK_ADDRESS_TRANSLATION_FAILURE
@@ -1606,7 +1627,9 @@ QMI_WDS_CDMA_CAUSE_CODE_GENERAL_USER_DATA_SIZE_ERROR
 QMI_WDS_CDMA_CAUSE_CODE_GENERAL_OTHER
 QMI_PROTOCOL_ERROR_QOS_UNAVAILABLE
 QMI_WDS_VERBOSE_CALL_END_REASON_CM_CONFIGURATION_FAILED
+QMI_WDS_VERBOSE_CALL_END_REASON_CM_MESSAGE_EXCEED_MAX_L2_LIMIT
 QMI_UIM_CARD_APPLICATION_PERSONALIZATION_FEATURE_UNKNOWN
+QMI_NAS_NETWORK_SERVICE_DOMAIN_UNKNOWN
 <SUBSECTION DellFirmwareVersion>
 QmiDmsDellFirmwareVersionType
 qmi_dms_dell_firmware_version_type_get_string

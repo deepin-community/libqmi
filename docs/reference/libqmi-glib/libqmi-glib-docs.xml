@@ -26,6 +26,8 @@
       <year>2021</year>
       <year>2022</year>
       <year>2023</year>
+      <year>2024</year>
+      <year>2025</year>
       <holder>The libqmi-glib authors</holder>
     </copyright>
 
@@ -185,6 +187,7 @@
       <xi:include href="xml/qmi-message-nas-get-plmn-name.xml"/>
       <xi:include href="xml/qmi-message-nas-swi-get-status.xml"/>
       <xi:include href="xml/qmi-message-nas-get-drx.xml"/>
+      <xi:include href="xml/qmi-message-nas-get-network-time.xml"/>
     </section>
   </chapter>
 
@@ -371,6 +374,9 @@
       <xi:include href="xml/qmi-message-uim-refresh-register-all.xml"/>
       <xi:include href="xml/qmi-message-uim-refresh-complete.xml"/>
       <xi:include href="xml/qmi-message-uim-remote-unlock.xml"/>
+      <xi:include href="xml/qmi-message-uim-open-logical-channel.xml"/>
+      <xi:include href="xml/qmi-message-uim-send-apdu.xml"/>
+      <xi:include href="xml/qmi-message-uim-logical-channel.xml"/>
     </section>
   </chapter>
 
@@ -400,10 +406,15 @@
     <xi:include href="xml/qmi-client-wda.xml"/>
     <xi:include href="xml/qmi-enums-wda.xml"/>
     <section>
+      <title>WDA Indications</title>
+      <xi:include href="xml/qmi-indication-wda-loopback-configuration.xml"/>
+    </section>
+    <section>
       <title>WDA Requests</title>
       <xi:include href="xml/qmi-message-wda-set-data-format.xml"/>
       <xi:include href="xml/qmi-message-wda-get-data-format.xml"/>
       <xi:include href="xml/qmi-message-wda-get-supported-messages.xml"/>
+      <xi:include href="xml/qmi-message-wda-loopback-configuration.xml"/>
     </section>
   </chapter>
 
@@ -513,6 +524,9 @@
       <xi:include href="xml/qmi-message-gas-dms-get-usb-composition.xml"/>
       <xi:include href="xml/qmi-message-gas-dms-get-firmware-list.xml"/>
       <xi:include href="xml/qmi-message-gas-dms-set-active-firmware.xml"/>
+      <xi:include href="xml/qmi-message-gas-dms-set-firmware-auto-sim.xml"/>
+      <xi:include href="xml/qmi-message-gas-dms-get-firmware-auto-sim.xml"/>
+      <xi:include href="xml/qmi-message-gas-dms-get-ethernet-pdu-mac-address.xml"/>
     </section>
   </chapter>
 
@@ -605,6 +619,10 @@
       <title>IMSA Requests</title>
       <xi:include href="xml/qmi-message-imsa-get-ims-registration-status.xml"/>
       <xi:include href="xml/qmi-message-imsa-get-ims-services-status.xml"/>
+      <xi:include href="xml/qmi-message-imsa-register-indications.xml"/>
+      <xi:include href="xml/qmi-indication-imsa-ims-registration-status-changed.xml"/>
+      <xi:include href="xml/qmi-indication-imsa-ims-services-status-changed.xml"/>
+      <xi:include href="xml/qmi-message-imsa-bind.xml"/>
     </section>
   </chapter>
 
@@ -614,6 +632,7 @@
     <section>
       <title>IMS Requests</title>
       <xi:include href="xml/qmi-message-ims-get-ims-services-enabled-setting.xml"/>
+      <xi:include href="xml/qmi-message-ims-bind.xml"/>
     </section>
   </chapter>
 
@@ -740,6 +759,10 @@
   <chapter id="api-index-1-34" role="1.34">
     <title>Index of new symbols in 1.34</title>
     <xi:include href="xml/api-index-1.34.xml"></xi:include>
+  </chapter>
+  <chapter id="api-index-1-36" role="1.36">
+    <title>Index of new symbols in 1.36</title>
+    <xi:include href="xml/api-index-1.36.xml"></xi:include>
   </chapter>
 
   <xi:include href="xml/annotation-glossary.xml"></xi:include>
